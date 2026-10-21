@@ -1,15 +1,15 @@
 import hashlib
 import os
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from decimal import Decimal, InvalidOperation
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from django.utils.text import get_valid_filename
-from .models import Case, Document, Event, FinancialEntry, PolicyVersion, TravelScale
+from .models import Case, CompensatoryLedgerEntry, Document, Event, FinancialEntry, PolicyVersion, TravelScale
 from .forms import BASE_FIELDS
-from .workflows import FIELDS, DOCS, WORKFLOWS, workflow, current_step, editable_step, actor_for, role_names
+from .workflows import FIELDS, DOCS, WORKFLOWS, workflow, current_step, editable_step, actor_for, actor_for_transition, transition_rule, role_names
 
 ZERO = Decimal('0.00')
 TERMINAL = {'cerrado', 'rechazado'}
@@ -41,6 +41,23 @@ def totals(case):
     return {'requested': requested, 'recognized': recognized, 'recovered': recovered, 'pending': requested - recovered, 'difference': requested - recognized, 'paid': paid, 'returned': returned, 'executed': executed, 'authorized': authorized, 'travel_balance': paid - executed - returned, 'committed': amount(case.data, 'rp_amount') if case.events.filter(action='Etapa completada', before='rp').exists() else ZERO}
 
 
+def compensatory_balance(user):
+    values = {row['kind']: row['total'] for row in user.compensatory_ledger.values('kind').annotate(total=Sum('minutes'))}
+    credit = values.get('credito', 0) or 0
+    debit = values.get('debito', 0) or 0
+    return {'credit': credit, 'debit': debit, 'balance': credit - debit}
+
+
+def compensatory_summary(case):
+    balance = compensatory_balance(case.owner)
+    return {
+        **balance,
+        'worked': int(case.data.get('worked_minutes') or 0),
+        'approved': int(case.data.get('approved_minutes') or 0),
+        'requested': int(case.data.get('requested_minutes') or 0),
+    }
+
+
 def check_revision(case, revision):
     if case.revision != revision:
         raise ValidationError('El expediente cambió en otra sesión. Recargue antes de continuar.')
@@ -61,6 +78,41 @@ def set_deadline(case):
 
 def validate_dates(case, strict=False):
     data = case.data
+    if case.kind == 'compensatorio':
+        work_date = data.get('work_date')
+        start, end = data.get('work_start'), data.get('work_end')
+        if strict and (not work_date or not start or not end):
+            raise ValidationError('Debe registrar la fecha y el horario del tiempo trabajado.')
+        if work_date:
+            try:
+                worked_on = date.fromisoformat(work_date)
+            except ValueError:
+                raise ValidationError('La fecha del tiempo trabajado no es válida.')
+            if worked_on > timezone.localdate():
+                raise ValidationError('No se puede registrar como trabajado un tiempo futuro.')
+        if start and end:
+            try:
+                start_time, end_time = time.fromisoformat(start), time.fromisoformat(end)
+            except ValueError:
+                raise ValidationError('El horario del tiempo trabajado no es válido.')
+            start_minutes = start_time.hour * 60 + start_time.minute
+            end_minutes = end_time.hour * 60 + end_time.minute
+            pause = int(data.get('break_minutes') or 0)
+            if end_minutes <= start_minutes or pause < 0 or pause >= end_minutes - start_minutes:
+                raise ValidationError('La hora final debe ser posterior al inicio y la pausa menor que el intervalo.')
+            data['worked_minutes'] = end_minutes - start_minutes - pause
+        request_start, request_end = data.get('request_start_date'), data.get('request_end_date')
+        if request_start or request_end:
+            if not request_start or not request_end:
+                return
+            try:
+                first, last = date.fromisoformat(request_start), date.fromisoformat(request_end)
+            except ValueError:
+                raise ValidationError('Las fechas solicitadas para el compensatorio no son válidas.')
+            if last < first or (last - first).days > 366:
+                raise ValidationError('El periodo solicitado no es válido o supera el máximo técnico de 366 días.')
+            data['days'] = (last - first).days + 1
+        return
     start, end = data.get('start_date'), data.get('end_date')
     if not start or not end:
         if strict:
@@ -92,7 +144,8 @@ def create_case(user, kind, cleaned):
         raise ValidationError('El usuario no tiene dependencia configurada.')
     policy = PolicyVersion.objects.filter(kind=kind).first()
     if not policy:
-        policy = PolicyVersion.objects.create(kind=kind, version=1, config={}, confirmed=False, source='Propuesta basada en el prompt; resoluciones no aportadas.')
+        source = 'Propuesta técnica pendiente de procedimiento oficial de compensatorios.' if kind == 'compensatorio' else 'Propuesta basada en el prompt; resoluciones no aportadas.'
+        policy = PolicyVersion.objects.create(kind=kind, version=1, config={}, confirmed=False, source=source)
     case = Case(kind=kind, owner=user, department=user.profile.department, policy=policy)
     case.data = serialize({k: v for k, v in cleaned.items() if k in BASE_FIELDS[kind]})
     validate_dates(case)
@@ -105,7 +158,7 @@ def create_case(user, kind, cleaned):
 def serialize(values):
     result = {}
     for key, value in values.items():
-        if isinstance(value, (date, Decimal)):
+        if isinstance(value, (date, time, Decimal)):
             value = str(value)
         elif isinstance(value, TravelScale):
             value = value.pk
@@ -200,7 +253,7 @@ def validate_step(case, step):
             raise ValidationError('Registre al menos una recuperación efectiva o continúe el seguimiento sin avanzar.')
         if key in {'saldos', 'control', 'cierre'} and money['pending'] != 0:
             raise ValidationError('Hay saldo pendiente. Registre la recuperación y repita los controles contables. Las bajas de cartera requieren un procedimiento institucional aún no configurado.')
-    else:
+    elif case.kind == 'viatico':
         if key == 'pago' and money['paid'] != money['authorized']:
             raise ValidationError('El desembolso registrado debe completar el total autorizado.')
         if key == 'comision' and date.fromisoformat(data['end_date']) > timezone.localdate():
@@ -209,6 +262,34 @@ def validate_step(case, step):
             raise ValidationError('Los gastos exceden el desembolso; se necesita un trámite institucional de ajuste antes de continuar.')
         if key in {'conciliacion', 'cierre'} and money['travel_balance'] != 0:
             raise ValidationError('La legalización no está conciliada: desembolso menos gastos y reintegros debe ser cero.')
+    else:
+        rules = case.policy.config.get('compensatory_rules', {})
+        if key in {'autorizacion_tiempo', 'solicitud_compensatorio', 'validacion_saldo', 'autorizacion_compensatorio', 'programacion', 'cierre'}:
+            if not case.policy.confirmed or rules.get('enabled') is not True:
+                raise ValidationError('El reconocimiento y descuento de tiempo está bloqueado hasta que exista una versión institucional confirmada con reglas habilitadas.')
+        approved = int(data.get('approved_minutes') or 0)
+        worked = int(data.get('worked_minutes') or 0)
+        requested_minutes = int(data.get('requested_minutes') or 0)
+        if key == 'autorizacion_tiempo':
+            if not 0 < approved <= worked:
+                raise ValidationError('El tiempo reconocido debe ser positivo y no puede superar el tiempo trabajado calculado.')
+            if not rules['min_credit_minutes'] <= approved <= rules['max_credit_minutes']:
+                raise ValidationError('El tiempo reconocido no cumple los límites institucionales configurados.')
+        if key in {'solicitud_compensatorio', 'validacion_saldo', 'autorizacion_compensatorio'}:
+            if not rules['min_request_minutes'] <= requested_minutes <= rules['max_request_minutes']:
+                raise ValidationError('La solicitud no cumple los límites institucionales configurados.')
+            if requested_minutes > compensatory_balance(case.owner)['balance']:
+                raise ValidationError('El tiempo solicitado supera el saldo autorizado disponible.')
+        if key == 'autorizacion_compensatorio':
+            start, end = data['request_start_date'], data['request_end_date']
+            overlapping = CompensatoryLedgerEntry.objects.filter(
+                employee=case.owner,
+                kind='debito',
+                case__data__request_start_date__lte=end,
+                case__data__request_end_date__gte=start,
+            ).exclude(case=case)
+            if overlapping.exists():
+                raise ValidationError('El periodo solicitado se superpone con otro compensatorio autorizado.')
     if key == 'cierre' and not case.policy.confirmed:
         raise ValidationError('Este expediente usa un flujo provisional. El cierre institucional requiere una versión normativa aprobada antes de abrir el expediente.')
 
@@ -227,7 +308,9 @@ def transition(user, case_id, revision, action, note=''):
         audit(case, user, 'Seguimiento registrado', before=case.stage, after=case.stage, note=note)
         bump(case)
         return case
-    if not actor_for(user, case):
+    if action == 'advance' and not actor_for_transition(user, case, action):
+        raise PermissionDenied('No tiene el rol autorizado para esta transición.')
+    if action != 'advance' and not actor_for(user, case):
         raise PermissionDenied('No tiene el rol responsable de esta etapa.')
     before = case.stage
     step = editable_step(case)
@@ -240,7 +323,29 @@ def transition(user, case_id, revision, action, note=''):
             case.return_to = ''
             case.correction_fields = ''
         else:
-            case.stage = steps[index + 1]['key'] if index + 1 < len(steps) else 'cerrado'
+            case.stage = transition_rule(case, action)['to']
+        if case.kind == 'compensatorio' and step['key'] == 'autorizacion_tiempo':
+            entry = CompensatoryLedgerEntry.objects.create(
+                employee=case.owner,
+                case=case,
+                kind='credito',
+                minutes=int(case.data['approved_minutes']),
+                effective_on=date.fromisoformat(case.data['work_date']),
+                rule_reference=case.data['recognition_rule_reference'],
+                actor=user,
+            )
+            audit(case, user, 'Tiempo reconocido y acreditado', before=before, after=case.stage, ledger_entry=entry.pk, minutes=entry.minutes, rule_reference=entry.rule_reference)
+        if case.kind == 'compensatorio' and step['key'] == 'autorizacion_compensatorio':
+            entry = CompensatoryLedgerEntry.objects.create(
+                employee=case.owner,
+                case=case,
+                kind='debito',
+                minutes=int(case.data['requested_minutes']),
+                effective_on=date.fromisoformat(case.data['request_start_date']),
+                rule_reference=case.policy.approval_reference,
+                actor=user,
+            )
+            audit(case, user, 'Compensatorio autorizado y descontado', before=before, after=case.stage, ledger_entry=entry.pk, minutes=entry.minutes, rule_reference=entry.rule_reference)
         action_label = 'Etapa completada'
     elif action == 'return':
         if case.stage == 'correccion' or index == 0 or 'owner' in step['roles']:
@@ -256,7 +361,7 @@ def transition(user, case_id, revision, action, note=''):
         case.correction_fields = note
         action_label = 'Devuelto para corrección'
     elif action == 'reject':
-        if case.stage != 'revision' or not note.strip():
+        if case.stage not in {'revision', 'revision_soportes'} or not note.strip():
             raise ValidationError('El rechazo exige justificación y solo procede en la revisión inicial.')
         case.stage = 'rechazado'
         action_label = 'Solicitud rechazada'

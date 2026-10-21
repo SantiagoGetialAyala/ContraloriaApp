@@ -59,6 +59,22 @@ FIELDS = {
     'executed': ('Gastos ejecutados y soportados (COP)', 'money'),
     'legalization_note': ('Observaciones de legalización', 'textarea'),
     'legalization_review': ('Resultado de revisión de legalización', 'textarea'),
+    'work_date': ('Fecha del tiempo trabajado', 'pastdate'),
+    'work_start': ('Hora de inicio', 'time'),
+    'work_end': ('Hora de terminación', 'time'),
+    'break_minutes': ('Minutos de pausa no computables', 'int'),
+    'worked_minutes': ('Tiempo trabajado calculado (minutos)', 'int'),
+    'activity_description': ('Actividad extraordinaria realizada', 'textarea'),
+    'support_review_note': ('Resultado de la revisión de soportes', 'textarea'),
+    'approved_minutes': ('Tiempo expresamente reconocido (minutos)', 'int'),
+    'recognition_rule_reference': ('Regla institucional aplicada', 'text'),
+    'request_start_date': ('Inicio solicitado del compensatorio', 'date'),
+    'request_end_date': ('Terminación solicitada del compensatorio', 'date'),
+    'requested_minutes': ('Tiempo solicitado para compensar (minutos)', 'int'),
+    'request_reason': ('Justificación de la solicitud', 'textarea'),
+    'balance_review_note': ('Verificación de saldo y condiciones', 'textarea'),
+    'compensatory_authorization_note': ('Decisión de autorización', 'textarea'),
+    'schedule_note': ('Registro de programación y novedades', 'textarea'),
 }
 DOCS = {
     'certificado': 'Certificado médico', 'soporte_solicitud': 'Soportes de la solicitud',
@@ -74,6 +90,9 @@ DOCS = {
     'orden_pago': 'Orden de pago', 'desembolso': 'Soporte de desembolso',
     'informe_comision': 'Informe y evidencias de comisión', 'gastos': 'Soportes de gastos ejecutados',
     'revision_legalizacion': 'Revisión de legalización', 'reintegro': 'Soporte de reintegro',
+    'soporte_tiempo': 'Soporte del tiempo trabajado', 'revision_soporte_tiempo': 'Revisión de soportes del tiempo trabajado',
+    'autorizacion_reconocimiento': 'Autorización del reconocimiento de tiempo', 'solicitud_compensatorio': 'Solicitud de compensatorio',
+    'revision_saldo': 'Verificación de saldo y condiciones', 'autorizacion_compensatorio': 'Autorización del compensatorio',
 }
 
 def s(key, label, roles, fields=(), docs=()):
@@ -119,7 +138,17 @@ VIA = [
     s('conciliacion', 'Conciliación financiera y reintegros', ['contabilidad'], ['reconciliation_note'], ['conciliacion']),
     s('cierre', 'Cierre del expediente', ['secretaria'], ['closure_note'], ['cierre']),
 ]
-WORKFLOWS = {'incapacidad': INC, 'viatico': VIA}
+COMP = [
+    s('borrador', 'Registro de tiempo trabajado', ['owner'], ['work_date', 'work_start', 'work_end', 'break_minutes', 'activity_description'], ['soporte_tiempo']),
+    s('revision_soportes', 'Revisión de soportes', ['talento'], ['support_review_note'], ['revision_soporte_tiempo']),
+    s('autorizacion_tiempo', 'Autorización de reconocimiento', ['autoridad'], ['approved_minutes', 'recognition_rule_reference'], ['autorizacion_reconocimiento']),
+    s('solicitud_compensatorio', 'Solicitud de compensatorio', ['owner'], ['request_start_date', 'request_end_date', 'requested_minutes', 'request_reason'], ['solicitud_compensatorio']),
+    s('validacion_saldo', 'Validación de saldo y condiciones', ['talento'], ['balance_review_note'], ['revision_saldo']),
+    s('autorizacion_compensatorio', 'Autorización del compensatorio', ['autoridad'], ['compensatory_authorization_note'], ['autorizacion_compensatorio']),
+    s('programacion', 'Programación y calendario', ['talento'], ['schedule_note']),
+    s('cierre', 'Cierre y archivo del expediente', ['talento'], ['closure_note'], ['cierre']),
+]
+WORKFLOWS = {'incapacidad': INC, 'viatico': VIA, 'compensatorio': COMP}
 
 
 def workflow(case):
@@ -160,6 +189,33 @@ def actor_for(user, case, step=None):
     return ('owner' in roles and user.pk == case.owner_id) or bool(role_names(user) & (roles - {'owner'}))
 
 
+def transition_rule(case, action='advance'):
+    """Return the configured state transition, falling back to the reviewed default path."""
+    step = editable_step(case)
+    if not step:
+        return None
+    configured = case.policy.config.get('transitions', [])
+    rule = next((item for item in configured if item['from'] == step['key'] and item['action'] == action), None)
+    if rule:
+        return rule
+    stages = workflow(case)
+    index = next(i for i, item in enumerate(stages) if item['key'] == step['key'])
+    return {
+        'from': step['key'],
+        'action': action,
+        'to': stages[index + 1]['key'] if index + 1 < len(stages) else 'cerrado',
+        'roles': step['roles'],
+    }
+
+
+def actor_for_transition(user, case, action='advance'):
+    rule = transition_rule(case, action)
+    if not rule:
+        return False
+    roles = set(rule['roles'])
+    return ('owner' in roles and user.pk == case.owner_id) or bool(role_names(user) & (roles - {'owner'}))
+
+
 def stage_label(case):
     if case.stage == 'cerrado':
         return 'Cerrado'
@@ -173,8 +229,9 @@ def stage_label(case):
 
 def validate_config(kind, config):
     from django.core.exceptions import ValidationError
-    if not isinstance(config, dict) or set(config) - {'roles', 'deadlines', 'additional_documents', 'milestones'}:
-        raise ValidationError('La configuración admite roles, deadlines, additional_documents y milestones.')
+    allowed_keys = {'roles', 'deadlines', 'additional_documents', 'milestones', 'transitions', 'compensatory_rules'}
+    if not isinstance(config, dict) or set(config) - allowed_keys:
+        raise ValidationError('La configuración contiene claves no admitidas.')
     stages = {s['key']: s for s in WORKFLOWS[kind]}
     valid_roles = {r[0] for r in ROLES} - {'administrador', 'solicitante'}
     for key in ['roles', 'deadlines', 'additional_documents']:
@@ -197,3 +254,45 @@ def validate_config(kind, config):
     for m in milestones:
         if not isinstance(m, dict) or set(m) != {'day', 'label', 'role'} or type(m['day']) is not int or not 1 <= m['day'] <= 3650 or not isinstance(m['label'], str) or not m['label'].strip() or m['role'] not in valid_roles:
             raise ValidationError('Cada hito requiere day (1 a 3650), label y role institucional.')
+    transitions = config.get('transitions', [])
+    if not isinstance(transitions, list):
+        raise ValidationError('transitions debe ser una lista.')
+    stage_keys = list(stages)
+    seen = set()
+    for item in transitions:
+        if not isinstance(item, dict) or set(item) != {'from', 'action', 'to', 'roles'}:
+            raise ValidationError('Cada transición requiere from, action, to y roles.')
+        identity = (item['from'], item['action'])
+        if identity in seen or item['from'] not in stages or item['action'] != 'advance':
+            raise ValidationError('La transición es duplicada o no corresponde a una etapa conocida.')
+        source_index = stage_keys.index(item['from'])
+        safe_targets = {stage_keys[source_index + 1]} if source_index + 1 < len(stage_keys) else {'cerrado'}
+        if kind == 'compensatorio' and item['from'] == 'autorizacion_compensatorio':
+            safe_targets.add('cierre')
+        if item['to'] not in safe_targets:
+            raise ValidationError('La transición omite controles obligatorios o apunta a un estado no permitido.')
+        expected_roles = config.get('roles', {}).get(item['from'], stages[item['from']]['roles'])
+        expected_owner = 'owner' in expected_roles
+        if not isinstance(item['roles'], list) or not item['roles'] or any(r not in valid_roles | {'owner'} for r in item['roles']) or (expected_owner and item['roles'] != ['owner']) or (not expected_owner and 'owner' in item['roles']):
+            raise ValidationError('Los roles de transición no son válidos para esa etapa.')
+        if item['roles'] != expected_roles:
+            raise ValidationError('Los roles de la transición deben coincidir con los responsables configurados para la etapa.')
+        seen.add(identity)
+    rules = config.get('compensatory_rules', {})
+    if kind != 'compensatorio' and rules:
+        raise ValidationError('compensatory_rules solo aplica a Gestión de Compensatorios.')
+    if kind == 'compensatorio':
+        allowed_rules = {'enabled', 'minutes_per_day', 'min_credit_minutes', 'max_credit_minutes', 'min_request_minutes', 'max_request_minutes', 'requirements', 'approval_conditions'}
+        if not isinstance(rules, dict) or set(rules) - allowed_rules:
+            raise ValidationError('La configuración de compensatorios contiene reglas desconocidas.')
+        if rules.get('enabled') is True:
+            for key in ['minutes_per_day', 'min_credit_minutes', 'max_credit_minutes', 'min_request_minutes', 'max_request_minutes']:
+                if type(rules.get(key)) is not int or not 1 <= rules[key] <= 100000:
+                    raise ValidationError(f'{key} debe ser un entero positivo cuando el reconocimiento está habilitado.')
+            if rules['min_credit_minutes'] > rules['max_credit_minutes'] or rules['min_request_minutes'] > rules['max_request_minutes']:
+                raise ValidationError('Los límites mínimos no pueden superar los máximos.')
+            for key in ['requirements', 'approval_conditions']:
+                if not isinstance(rules.get(key), list) or not rules[key] or any(not isinstance(value, str) or not value.strip() for value in rules[key]):
+                    raise ValidationError(f'{key} requiere una lista no vacía de textos verificados.')
+        elif rules and rules.get('enabled') not in {False, None}:
+            raise ValidationError('enabled debe ser verdadero o falso.')

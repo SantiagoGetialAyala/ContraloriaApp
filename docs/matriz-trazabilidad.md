@@ -1,6 +1,6 @@
 # Matriz de trazabilidad técnica
 
-Estado al 19 de octubre de 2026. Las fuentes oficiales no fueron aportadas. Las actividades y los responsables son una propuesta a partir del prompt; no se atribuyen páginas ni reglas a documentos no revisados. La implementación y sus pruebas no certifican cumplimiento normativo.
+Estado al 20 de octubre de 2026. Las fuentes oficiales no fueron aportadas, incluido el procedimiento de compensatorios. Las actividades y los responsables son una propuesta a partir del prompt; no se atribuyen páginas ni reglas a documentos no revisados. La implementación y sus pruebas no certifican cumplimiento normativo.
 
 La tabla completa, con condiciones, evidencias y componentes, está en [matriz-trazabilidad.csv](matriz-trazabilidad.csv). Las vistas también muestran los responsables y documentos del expediente con su versión de configuración.
 
@@ -41,6 +41,14 @@ La tabla completa, con condiciones, evidencias y componentes, está en [matriz-t
 | Viáticos | revision_legalizacion | Revisión de legalización | Talento Humano (propuesto; verificar fuente) | Revisión de legalización | conciliacion |
 | Viáticos | conciliacion | Conciliación financiera y reintegros | Contabilidad (propuesto; verificar fuente) | Soporte de conciliación | cierre |
 | Viáticos | cierre | Cierre del expediente | Secretaría de Despacho (propuesto; verificar fuente) | Constancia de cierre | cerrado |
+| Compensatorios | borrador | Registro de tiempo trabajado | Solicitante titular (propuesto; verificar fuente) | Soporte del tiempo trabajado | revision_soportes |
+| Compensatorios | revision_soportes | Revisión de soportes | Talento Humano (propuesto; verificar fuente) | Revisión de soportes del tiempo trabajado | autorizacion_tiempo |
+| Compensatorios | autorizacion_tiempo | Autorización de reconocimiento | Autoridad competente (propuesto; verificar fuente) | Autorización del reconocimiento de tiempo | solicitud_compensatorio |
+| Compensatorios | solicitud_compensatorio | Solicitud de compensatorio | Solicitante titular (propuesto; verificar fuente) | Solicitud de compensatorio | validacion_saldo |
+| Compensatorios | validacion_saldo | Validación de saldo y condiciones | Talento Humano (propuesto; verificar fuente) | Verificación de saldo y condiciones | autorizacion_compensatorio |
+| Compensatorios | autorizacion_compensatorio | Autorización del compensatorio | Autoridad competente (propuesto; verificar fuente) | Autorización del compensatorio | programacion |
+| Compensatorios | programacion | Programación y calendario | Talento Humano (propuesto; verificar fuente) | Historial de actuación | cierre |
+| Compensatorios | cierre | Cierre y archivo | Talento Humano (propuesto; verificar fuente) | Constancia de cierre | cerrado |
 
 ## Decisiones y devoluciones
 

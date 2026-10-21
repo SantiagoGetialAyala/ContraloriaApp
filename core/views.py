@@ -18,9 +18,9 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST, require_http_methods
-from .models import Case, Document, Event, Profile, PolicyVersion, TravelScale, LoginAttempt, ROLES
+from .models import Case, CompensatoryLedgerEntry, Document, Event, Profile, PolicyVersion, TravelScale, LoginAttempt, ROLES
 from .forms import RecognitionForm, CaseDataForm, UploadForm, PaymentForm, DecisionForm, SetupForm, UserForm, UserAccessForm, ScaleForm, PolicyForm, BASE_FIELDS
-from .workflows import workflow, current_step, editable_step, stage_label, actor_for, role_names, WORKFLOWS, DOCS, FIELDS
+from .workflows import workflow, current_step, editable_step, stage_label, actor_for, actor_for_transition, role_names, WORKFLOWS, DOCS, FIELDS
 from .access import visible_cases, get_case, can_document, require_role
 from . import services
 
@@ -134,7 +134,12 @@ def dashboard(request):
     now = timezone.now()
     stats = {'total': len(cases), 'active': 0, 'closed': 0, 'review': 0, 'overdue': 0, 'rejected': 0, 'recovered': Decimal('0'), 'pending': Decimal('0'), 'committed': Decimal('0'), 'executed': Decimal('0'), 'payments': Decimal('0'), 'legalizations': 0, 'approved_trips': 0, 'inc_review': 0, 'inc_recoveries': 0, 'trip_rejected': 0, 'trip_commissions': 0, 'trip_paid': 0}
     tasks, alerts = [], []
-    kinds = {'incapacidad': {'name': 'Incapacidades', 'count': 0, 'closed': 0}, 'viatico': {'name': 'Viáticos', 'count': 0, 'closed': 0}}
+    kinds = {
+        'incapacidad': {'name': 'Incapacidades', 'count': 0, 'closed': 0},
+        'viatico': {'name': 'Viáticos', 'count': 0, 'closed': 0},
+        'compensatorio': {'name': 'Compensatorios', 'count': 0, 'closed': 0},
+    }
+    stats.update({'comp_pending': 0, 'comp_authorized': 0, 'comp_balance': 0})
     for case in cases:
         decorate(case)
         kinds[case.kind]['count'] += 1
@@ -152,7 +157,7 @@ def dashboard(request):
             alerts.append({'case': case, 'label': 'Plazo de etapa vencido', 'date': case.due_at})
         if case.stage == 'correccion':
             alerts.append({'case': case, 'label': 'Documentación por corregir', 'date': case.updated_at})
-        if actor_for(request.user, case):
+        if actor_for(request.user, case) or actor_for_transition(request.user, case):
             tasks.append(case)
             step = editable_step(case)
             existing = set(case.documents.values_list('category', flat=True))
@@ -172,7 +177,7 @@ def dashboard(request):
                     when = date.fromisoformat(case.data['start_date']) + timedelta(days=milestone['day'] - 1)
                     if when <= timezone.localdate() and (case.owner_id == request.user.pk or milestone['role'] in role_names(request.user)):
                         alerts.append({'case': case, 'label': milestone['label'], 'date': when})
-        else:
+        elif case.kind == 'viatico':
             if case.stage == 'rechazado':
                 stats['trip_rejected'] += 1
             if case.stage == 'comision':
@@ -186,8 +191,14 @@ def dashboard(request):
                 stats['approved_trips'] += 1
             if case.stage in {'comision', 'legalizacion', 'revision_legalizacion', 'conciliacion'}:
                 stats['legalizations'] += 1
+        else:
+            if case.stage in {'revision_soportes', 'validacion_saldo', 'autorizacion_tiempo', 'autorizacion_compensatorio'}:
+                stats['comp_pending'] += 1
+            if case.compensatory_entries.filter(kind='debito').exists():
+                stats['comp_authorized'] += 1
+    stats['comp_balance'] = services.compensatory_balance(request.user)['balance']
     provisional = PolicyVersion.objects.filter(confirmed=False).exists() or not PolicyVersion.objects.exists()
-    return render(request, 'core/dashboard.html', {'title': 'Panel de gestión', 'stats': stats, 'tasks': tasks[:8], 'recent': cases[:6], 'alerts': alerts[:8], 'kinds': kinds, 'provisional': provisional, 'task_count': len([c for c in cases if actor_for(request.user, c)]), 'today': timezone.localdate()})
+    return render(request, 'core/dashboard.html', {'title': 'Panel de gestión', 'stats': stats, 'tasks': tasks[:8], 'recent': cases[:6], 'alerts': alerts[:8], 'kinds': kinds, 'provisional': provisional, 'task_count': len(tasks), 'today': timezone.localdate()})
 
 
 def filtered_cases(request, kind):
@@ -224,7 +235,8 @@ def case_list(request, kind):
     states = [(s['key'], s['label']) for s in WORKFLOWS[kind]] + [('correccion', 'En corrección'), ('cerrado', 'Cerrado'), ('rechazado', 'Rechazado')]
     query = request.GET.copy()
     query.pop('page', None)
-    return render(request, 'core/list.html', {'title': 'Incapacidades y recobro' if kind == 'incapacidad' else 'Viáticos y gastos de viaje', 'kind': kind, 'cases': cases, 'page': page, 'states': states, 'query': query.urlencode(), 'count': queryset.count()})
+    titles = {'incapacidad': 'Incapacidades y recobro', 'viatico': 'Viáticos y gastos de viaje', 'compensatorio': 'Gestión de compensatorios'}
+    return render(request, 'core/list.html', {'title': titles[kind], 'kind': kind, 'cases': cases, 'page': page, 'states': states, 'query': query.urlencode(), 'count': queryset.count()})
 
 
 @login_required
@@ -237,7 +249,8 @@ def case_create(request, kind):
         result = []
         if perform(request, lambda: result.append(services.create_case(request.user, kind, form.cleaned_data)), success='Borrador guardado. Adjunte los soportes para enviarlo a revisión.'):
             return redirect('case_detail', case_id=result[0].pk)
-    return render(request, 'core/form.html', {'form': form, 'title': 'Nueva incapacidad' if kind == 'incapacidad' else 'Nueva comisión', 'subtitle': 'Guarde el borrador, complete sus documentos y envíelo a revisión.', 'button': 'Guardar borrador', 'back': reverse('case_list', args=[kind])})
+    titles = {'incapacidad': 'Nueva incapacidad', 'viatico': 'Nueva comisión', 'compensatorio': 'Nuevo registro de tiempo trabajado'}
+    return render(request, 'core/form.html', {'form': form, 'title': titles[kind], 'subtitle': 'Guarde el borrador, complete sus documentos y envíelo a revisión.', 'button': 'Guardar borrador', 'back': reverse('case_list', args=[kind])})
 
 
 def detail_context(request, case, **extra):
@@ -245,7 +258,7 @@ def detail_context(request, case, **extra):
     step = editable_step(case)
     if step:
         step['role_labels'] = [dict(ROLES).get(r, 'Solicitante') for r in step['roles']]
-    can_edit = actor_for(request.user, case)
+    can_edit = actor_for(request.user, case) or actor_for_transition(request.user, case)
     keys = BASE_FIELDS[case.kind] if step and step['key'] == 'borrador' else step['fields'] if step else []
     documents = [d for d in case.documents.defer('content').select_related('uploaded_by') if can_document(request.user, d)]
     for d in documents:
@@ -273,7 +286,7 @@ def detail_context(request, case, **extra):
         values.append({'label': definition[0], 'value': v})
     events = case.events.select_related('actor').order_by('-created_at', '-id')
     event_page = Paginator(events, 30).get_page(request.GET.get('history_page'))
-    return {'case': case, 'title': case.reference, 'step': step, 'steps': steps, 'can_edit': can_edit, 'can_return': can_edit and case.stage not in {'borrador', 'correccion'} and step and 'owner' not in step['roles'], 'full_access': full, 'data_form': CaseDataForm(keys=keys, initial_data=case.data, initial=initial), 'upload_form': UploadForm(categories=categories, initial=initial) if categories else None, 'decision_form': DecisionForm(initial=initial), 'payment_form': PaymentForm(case=case, initial=initial) if services.treasury_allowed(request.user, case) else None, 'documents': documents, 'events': event_page, 'values': values, 'totals': services.totals(case), 'can_recognize': case.kind == 'incapacidad' and 'talento' in roles and case.stage in {'recaudo', 'saldos', 'comunicacion', 'contabilidad', 'conciliacion'}, 'recognition_documents': case.documents.filter(category='reconocimiento').defer('content'), 'required_documents': [DOCS[d] for d in step['docs']] if step else [], **extra}
+    return {'case': case, 'title': case.reference, 'step': step, 'steps': steps, 'can_edit': can_edit, 'can_return': can_edit and case.stage not in {'borrador', 'correccion'} and step and 'owner' not in step['roles'], 'full_access': full, 'data_form': CaseDataForm(keys=keys, initial_data=case.data, initial=initial), 'upload_form': UploadForm(categories=categories, initial=initial) if categories else None, 'decision_form': DecisionForm(initial=initial), 'payment_form': PaymentForm(case=case, initial=initial) if services.treasury_allowed(request.user, case) else None, 'documents': documents, 'events': event_page, 'values': values, 'totals': services.totals(case), 'compensatory': services.compensatory_summary(case) if case.kind == 'compensatorio' else None, 'ledger_entries': case.owner.compensatory_ledger.select_related('case', 'actor') if case.kind == 'compensatorio' else [], 'can_recognize': case.kind == 'incapacidad' and 'talento' in roles and case.stage in {'recaudo', 'saldos', 'comunicacion', 'contabilidad', 'conciliacion'}, 'recognition_documents': case.documents.filter(category='reconocimiento').defer('content'), 'required_documents': [DOCS[d] for d in step['docs']] if step else [], **extra}
 
 
 @login_required
@@ -384,13 +397,19 @@ def report(request, kind):
     response['Content-Disposition'] = f'attachment; filename="reporte-{kind}-{timezone.localdate()}.csv"'
     response.write('\ufeff')
     writer = csv.writer(response, delimiter=';')
-    financial = ['Solicitado', 'Reconocido', 'Recuperado', 'Saldo pendiente', 'Diferencia reconocimiento'] if kind == 'incapacidad' else ['Comprometido', 'Autorizado', 'Desembolsado', 'Ejecutado', 'Reintegrado', 'Diferencia']
+    financial = {'incapacidad': ['Solicitado', 'Reconocido', 'Recuperado', 'Saldo pendiente', 'Diferencia reconocimiento'], 'viatico': ['Comprometido', 'Autorizado', 'Desembolsado', 'Ejecutado', 'Reintegrado', 'Diferencia'], 'compensatorio': ['Minutos trabajados', 'Minutos reconocidos', 'Minutos solicitados', 'Saldo del funcionario']}[kind]
     writer.writerow(['Expediente', 'Solicitante', 'Dependencia', 'Estado', 'Creación', 'Inicio', 'Fin', *financial])
     count = 0
     for case in filtered_cases(request, kind).iterator(chunk_size=100):
-        t = services.totals(case)
-        amounts = [t[k] for k in (['requested', 'recognized', 'recovered', 'pending', 'difference'] if kind == 'incapacidad' else ['committed', 'authorized', 'paid', 'executed', 'returned', 'travel_balance'])]
-        writer.writerow([safe_csv(x) for x in [case.reference, case.owner.get_full_name() or case.owner.username, case.department, stage_label(case), case.created_at.isoformat(), case.data.get('start_date', ''), case.data.get('end_date', ''), *amounts]])
+        if kind == 'compensatorio':
+            t = services.compensatory_summary(case)
+            amounts = [t[k] for k in ['worked', 'approved', 'requested', 'balance']]
+            start, end = case.data.get('request_start_date', ''), case.data.get('request_end_date', '')
+        else:
+            t = services.totals(case)
+            amounts = [t[k] for k in (['requested', 'recognized', 'recovered', 'pending', 'difference'] if kind == 'incapacidad' else ['committed', 'authorized', 'paid', 'executed', 'returned', 'travel_balance'])]
+            start, end = case.data.get('start_date', ''), case.data.get('end_date', '')
+        writer.writerow([safe_csv(x) for x in [case.reference, case.owner.get_full_name() or case.owner.username, case.department, stage_label(case), case.created_at.isoformat(), start, end, *amounts]])
         count += 1
     services.audit(None, request.user, 'Reporte exportado', kind=kind, count=count)
     return response
@@ -480,6 +499,21 @@ def audit_log(request):
 @login_required
 def procedure(request):
     return render(request, 'core/procedure.html', {'title': 'Procedimientos y responsabilidades', 'definitions': WORKFLOWS, 'fields': FIELDS, 'docs': DOCS, 'roles': dict(ROLES)})
+
+
+@login_required
+def compensatory_calendar(request):
+    visible = visible_cases(request.user).filter(kind='compensatorio')
+    entries = list(CompensatoryLedgerEntry.objects.filter(kind='debito', case__in=visible).select_related('employee', 'case', 'actor'))
+    entries.sort(key=lambda entry: (entry.case.data.get('request_start_date', ''), entry.employee.get_full_name() or entry.employee.username))
+    services.audit(None, request.user, 'Calendario de compensatorios consultado', count=len(entries))
+    return render(request, 'core/compensatory_calendar.html', {
+        'title': 'Calendario de compensatorios',
+        'entries': entries,
+        'today': timezone.localdate(),
+        'own_balance': services.compensatory_balance(request.user),
+        'kind': 'compensatorio',
+    })
 
 
 def forbidden(request, exception=None):

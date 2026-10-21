@@ -1,8 +1,8 @@
 # Talento Humano · Contraloría Municipal de Pasto
 
-Aplicación local creada desde cero con **Django 6.0.4, SQLite y plantillas HTML/CSS/JavaScript**. Contiene dos módulos conectados a persistencia real: incapacidades y recobro, y viáticos y gastos de viaje.
+Aplicación local creada desde cero con **Django 6.0.4, SQLite y plantillas HTML/CSS/JavaScript**. Contiene tres módulos conectados a persistencia real: incapacidades y recobro, viáticos y gastos de viaje, y un prototipo de gestión de compensatorios.
 
-Los flujos iniciales son propuestas técnicas basadas en el prompt recibido. **No se han recibido ni verificado las tres resoluciones oficiales.** Los expedientes provisionales permiten probar el proceso, pero no obtener un cierre institucional. La autoridad puede registrar una versión confirmada tras revisar sus fuentes; se aplica a expedientes nuevos.
+Los flujos iniciales son propuestas técnicas basadas en el prompt recibido. **No se han recibido ni verificado las tres resoluciones oficiales ni el procedimiento oficial de compensatorios.** Los expedientes provisionales permiten probar el proceso, pero no obtener un cierre institucional ni reconocer o descontar tiempo. La autoridad puede registrar una versión confirmada tras revisar sus fuentes; se aplica a expedientes nuevos.
 
 ## Ejecutar
 
@@ -35,6 +35,7 @@ python manage.py bootstrap
 5. Una devolución debe identificar los campos o documentos que se deben corregir. El responsable de la etapa anterior podrá corregir y reenviar; los documentos exigidos deberán tener una versión nueva. Se conservan los documentos anteriores.
 6. Para registrar movimientos financieros, Tesorería adjunta primero el soporte del tipo de movimiento y luego registra valor, fecha efectiva y referencia bancaria. Se admiten pagos parciales. El sistema no ejecuta transferencias.
 7. Las diferencias de viáticos se concilian con gastos soportados y reintegros. Los saldos de recobro se mantienen abiertos hasta su recuperación. Una recuperación posterior a la conciliación devuelve el expediente a Contabilidad y exige nuevas evidencias de sus controles.
+8. En compensatorios, el funcionario registra el tiempo trabajado y sus soportes. El registro no crea saldo. Una autoridad debe reconocer expresamente los minutos bajo reglas institucionales confirmadas; otra actuación expresa autoriza la solicitud y genera el descuento.
 
 ## Parámetros institucionales
 
@@ -42,6 +43,7 @@ En **Parámetros y normativa**, la autoridad puede:
 
 - Registrar versiones del procedimiento con fuente, páginas, referencia de aprobación, responsables, plazos, documentos adicionales e hitos de seguimiento o rehabilitación.
 - Registrar versiones de escalas de viáticos por categoría, destino, vigencia, tarifa con pernoctación y tarifa sin pernoctación. No se precargan cifras legales.
+- Definir para compensatorios responsables, transiciones seguras, equivalencia de minutos por día, límites, requisitos y condiciones de aprobación. `compensatory_rules.enabled` debe permanecer en `false` hasta la validación institucional.
 
 La categoría y el destino deben coincidir con la solicitud; la escala debe cubrir toda la comisión. La liquidación conserva una copia de tarifas, fuente, aprobador, fecha y responsable. La duración informativa cuenta días calendario inclusivos; los días pagables se introducen y verifican por separado. No se asume una regla porcentual de pago médico.
 
@@ -52,7 +54,8 @@ Ejemplo **de estructura**, sin imponer plazos administrativos:
   "roles": {"revision": ["talento"]},
   "deadlines": {},
   "additional_documents": {},
-  "milestones": []
+  "milestones": [],
+  "transitions": []
 }
 ```
 

@@ -9,6 +9,7 @@ from .workflows import FIELDS, DOCS
 BASE_FIELDS = {
     'incapacidad': ['start_date', 'end_date', 'leave_type', 'entity', 'observations'],
     'viatico': ['start_date', 'end_date', 'purpose', 'destination', 'category', 'overnight', 'transport', 'observations'],
+    'compensatorio': ['work_date', 'work_start', 'work_end', 'break_minutes', 'activity_description', 'observations'],
 }
 
 class CaseDataForm(forms.Form):
@@ -20,6 +21,8 @@ class CaseDataForm(forms.Form):
             common = {'label': label, 'required': False}
             if kind in ('date', 'pastdate'):
                 field = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}), **common)
+            elif kind == 'time':
+                field = forms.TimeField(widget=forms.TimeInput(attrs={'type': 'time'}), **common)
             elif kind == 'money':
                 field = forms.DecimalField(min_value=0, max_value=Decimal('999999999999.99'), max_digits=14, decimal_places=2, widget=forms.NumberInput(attrs={'step': '0.01'}), **common)
             elif kind == 'int':
@@ -119,7 +122,7 @@ class PolicyForm(forms.Form):
     source = forms.CharField(label='Documento oficial y ubicación de la fuente', widget=forms.Textarea(attrs={'rows': 2}), max_length=5000)
     source_pages = forms.CharField(label='Páginas, tablas y diagramas verificados', max_length=200)
     approval_reference = forms.CharField(label='Referencia de aprobación institucional', max_length=200)
-    config = forms.JSONField(label='Responsables, plazos, documentos e hitos (JSON)', initial={'roles': {}, 'deadlines': {}, 'additional_documents': {}, 'milestones': []}, widget=forms.Textarea(attrs={'rows': 8}))
+    config = forms.JSONField(label='Responsables, transiciones, límites, requisitos e hitos (JSON)', initial={'roles': {}, 'deadlines': {}, 'additional_documents': {}, 'milestones': [], 'transitions': []}, widget=forms.Textarea(attrs={'rows': 12}))
     confirmed = forms.BooleanField(label='Confirmo que contrasté el flujo con las fuentes y tengo competencia para aprobar esta versión')
     def clean(self):
         data = super().clean()

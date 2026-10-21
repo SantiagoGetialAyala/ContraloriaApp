@@ -9,6 +9,7 @@ urlpatterns = [
     path('modulos/<str:kind>/', views.case_list, name='case_list'),
     path('modulos/<str:kind>/nuevo/', views.case_create, name='case_create'),
     path('modulos/<str:kind>/reporte/', views.report, name='report'),
+    path('compensatorios/calendario/', views.compensatory_calendar, name='compensatory_calendar'),
     path('expedientes/<uuid:case_id>/', views.case_detail, name='case_detail'),
     path('expedientes/<uuid:case_id>/guardar/', views.case_save, name='case_save'),
     path('expedientes/<uuid:case_id>/actuar/', views.case_decision, name='case_decision'),

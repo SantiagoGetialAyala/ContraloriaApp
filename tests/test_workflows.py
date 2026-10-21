@@ -6,7 +6,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
-from core.models import Case, Document, Event, FinancialEntry, Profile, PolicyVersion, TravelScale, ROLES
+from core.models import Case, CompensatoryLedgerEntry, Document, Event, FinancialEntry, Profile, PolicyVersion, TravelScale, ROLES
 from core import services
 from core.access import can_document, visible_cases
 from core.forms import CaseDataForm, BASE_FIELDS
@@ -119,6 +119,101 @@ class WorkflowTests(TestCase):
         self.until(c, 'cerrado')
         self.assertEqual(services.totals(c)['travel_balance'], 0)
         self.assertEqual(c.financial_entries.count(), 2)
+
+    def compensatory_policy(self, enabled=True):
+        policy = PolicyVersion.objects.get(kind='compensatorio')
+        policy.config = {'compensatory_rules': {
+            'enabled': enabled,
+            'minutes_per_day': 480,
+            'min_credit_minutes': 30,
+            'max_credit_minutes': 720,
+            'min_request_minutes': 30,
+            'max_request_minutes': 480,
+            'requirements': ['Soporte verificable del tiempo trabajado'],
+            'approval_conditions': ['Autorización expresa de la autoridad competente'],
+        }} if enabled else {'compensatory_rules': {'enabled': False}}
+        policy.confirmed = enabled
+        policy.save()
+        return policy
+
+    def new_compensatory(self):
+        worked_on = timezone.localdate() - timedelta(days=2)
+        return services.create_case(self.people['solicitante'], 'compensatorio', {
+            'work_date': worked_on,
+            'work_start': '18:00',
+            'work_end': '21:00',
+            'break_minutes': 0,
+            'activity_description': 'Actividad institucional extraordinaria soportada.',
+            'observations': '',
+        })
+
+    def test_compensatory_complete_authorized_flow_ledger_calendar_and_history(self):
+        self.compensatory_policy()
+        c = self.new_compensatory()
+        self.attach(c, 'soporte_tiempo', c.owner)
+        services.transition(c.owner, c.pk, c.revision, 'advance', 'Registro enviado')
+        self.refresh(c)
+        services.save_data(self.people['talento'], c.pk, c.revision, {'support_review_note': 'Soporte verificado'})
+        self.refresh(c)
+        self.attach(c, 'revision_soporte_tiempo', self.people['talento'])
+        services.transition(self.people['talento'], c.pk, c.revision, 'advance', 'Revisión completa')
+        self.refresh(c)
+        services.save_data(self.people['autoridad'], c.pk, c.revision, {'approved_minutes': 180, 'recognition_rule_reference': 'Regla institucional de prueba'})
+        self.refresh(c)
+        self.attach(c, 'autorizacion_reconocimiento', self.people['autoridad'])
+        services.transition(self.people['autoridad'], c.pk, c.revision, 'advance', 'Reconocimiento autorizado')
+        self.refresh(c)
+        self.assertEqual(services.compensatory_balance(c.owner)['balance'], 180)
+        self.assertEqual(c.compensatory_entries.get(kind='credito').minutes, 180)
+
+        requested_on = timezone.localdate() + timedelta(days=5)
+        services.save_data(c.owner, c.pk, c.revision, {'request_start_date': requested_on, 'request_end_date': requested_on, 'requested_minutes': 120, 'request_reason': 'Solicitud personal de prueba'})
+        self.refresh(c)
+        self.attach(c, 'solicitud_compensatorio', c.owner)
+        services.transition(c.owner, c.pk, c.revision, 'advance', 'Solicitud enviada')
+        self.refresh(c)
+        services.save_data(self.people['talento'], c.pk, c.revision, {'balance_review_note': 'Saldo y condiciones verificados'})
+        self.refresh(c)
+        self.attach(c, 'revision_saldo', self.people['talento'])
+        services.transition(self.people['talento'], c.pk, c.revision, 'advance', 'Saldo validado')
+        self.refresh(c)
+        services.save_data(self.people['autoridad'], c.pk, c.revision, {'compensatory_authorization_note': 'Solicitud autorizada expresamente'})
+        self.refresh(c)
+        self.attach(c, 'autorizacion_compensatorio', self.people['autoridad'])
+        services.transition(self.people['autoridad'], c.pk, c.revision, 'advance', 'Compensatorio autorizado')
+        self.refresh(c)
+        self.assertEqual(services.compensatory_balance(c.owner)['balance'], 60)
+        self.assertEqual(c.compensatory_entries.get(kind='debito').minutes, 120)
+        self.assertTrue(c.events.filter(action='Compensatorio autorizado y descontado').exists())
+
+        self.client.force_login(c.owner)
+        detail = self.client.get(reverse('case_detail', args=[c.pk]))
+        self.assertContains(detail, 'Control de saldos')
+        self.assertContains(detail, '60 min')
+        response = self.client.get(reverse('compensatory_calendar'))
+        self.assertContains(response, c.reference)
+        self.assertContains(response, '120 min')
+        report = self.client.get(reverse('report', args=['compensatorio']))
+        self.assertEqual(report.status_code, 200)
+        self.assertIn(c.reference, report.content.decode('utf-8-sig'))
+
+    def test_compensatory_provisional_policy_never_recognizes_time(self):
+        self.compensatory_policy(enabled=False)
+        c = self.new_compensatory()
+        self.attach(c, 'soporte_tiempo', c.owner)
+        services.transition(c.owner, c.pk, c.revision, 'advance')
+        self.refresh(c)
+        services.save_data(self.people['talento'], c.pk, c.revision, {'support_review_note': 'Revisado'})
+        self.refresh(c)
+        self.attach(c, 'revision_soporte_tiempo', self.people['talento'])
+        services.transition(self.people['talento'], c.pk, c.revision, 'advance')
+        self.refresh(c)
+        services.save_data(self.people['autoridad'], c.pk, c.revision, {'approved_minutes': 180, 'recognition_rule_reference': 'Referencia sin aprobar'})
+        self.refresh(c)
+        self.attach(c, 'autorizacion_reconocimiento', self.people['autoridad'])
+        with self.assertRaisesMessage(ValidationError, 'bloqueado'):
+            services.transition(self.people['autoridad'], c.pk, c.revision, 'advance')
+        self.assertFalse(CompensatoryLedgerEntry.objects.filter(case=c).exists())
 
     def test_missing_document_blocks_submission(self):
         c = self.new()
@@ -353,6 +448,11 @@ class WorkflowTests(TestCase):
         for config in [{'roles': {'revision': ['administrador']}}, {'roles': {'revision': ['owner']}}, {'deadlines': {'revision': -1}}, {'deadlines': {'inexistente': 3}}, {'milestones': [{'day': -2, 'label': 'X', 'role': 'talento'}]}, {'additional_documents': {'revision': ['no_existe']}}]:
             with self.assertRaises(ValidationError):
                 validate_config('incapacidad', config)
+        validate_config('compensatorio', {'compensatory_rules': {'enabled': True, 'minutes_per_day': 480, 'min_credit_minutes': 30, 'max_credit_minutes': 600, 'min_request_minutes': 30, 'max_request_minutes': 480, 'requirements': ['Soporte'], 'approval_conditions': ['Autorización']}})
+        with self.assertRaises(ValidationError):
+            validate_config('compensatorio', {'compensatory_rules': {'enabled': True, 'minutes_per_day': 480}})
+        with self.assertRaises(ValidationError):
+            validate_config('compensatorio', {'transitions': [{'from': 'borrador', 'action': 'advance', 'to': 'autorizacion_tiempo', 'roles': ['owner']}]})
 
     def test_policy_deadlines_and_owner_isolation(self):
         p = PolicyVersion.objects.get(kind='incapacidad')

@@ -1,10 +1,10 @@
 # Entrega y verificación
 
-Fecha: 19 de octubre de 2026.
+Fecha inicial: 19 de octubre de 2026. Actualización: 20 de octubre de 2026.
 
 ## Resultado
 
-Se construyó desde cero una aplicación local de Talento Humano con Django 6.0.4 y SQLite. Los dos módulos tienen formularios conectados al backend, persistencia y estados controlados. No se encontró código previo que conservar. No se insertaron datos de demostración en la base de uso.
+Se construyó desde cero una aplicación local de Talento Humano con Django 6.0.4 y SQLite. Incapacidades/recobros y viáticos conservan sus formularios, persistencia y estados controlados. El 20 de octubre se incorporó el prototipo de Gestión de Compensatorios sin eliminar funciones existentes. No se insertaron datos de demostración en la base de uso.
 
 La implementación es operativa para validación funcional local. La validación institucional de las resoluciones sigue pendiente; no se declara cumplimiento normativo ni instalación productiva.
 
@@ -12,7 +12,7 @@ La implementación es operativa para validación funcional local. La validación
 
 - `manage.py`, `requirements.txt`, `iniciar.command`, `.gitignore` y `README.md`: dependencias, ejecución e instrucciones.
 - `talento/`: configuración y rutas de la aplicación.
-- `core/models.py`, `core/migrations/0001_initial.py`: esquema, relaciones y restricciones.
+- `core/models.py`, `core/migrations/0001_initial.py` y `0002_*.py`: esquema, relaciones, restricciones y libro de saldos de compensatorios.
 - `core/workflows.py`, `core/services.py`, `core/access.py`, `core/forms.py`, `core/views.py`: flujos, transacciones, validación, acceso y consultas.
 - `core/context.py`, `core/middleware.py`, `core/templatetags/`: navegación, seguridad de respuestas y formato de importes.
 - `core/templates/core/`, `core/static/core/`: interfaz, formularios, tablas, navegación y confirmaciones.
@@ -28,17 +28,20 @@ Incapacidades: tipos solicitados en el prompt, EPS/ARL, fechas y duración inclu
 
 Viáticos: objeto, destino, dependencia, fechas, duración y pernoctación, autorización inicial, solicitud y registro separados de CDP y RP, liquidación con escalas versionadas, proyecto y acto firmado, orden de pago, desembolsos parciales, informe de comisión, gastos y soportes, devolución de legalización, reintegros, conciliación y cierre condicionado. La liquidación conserva las tarifas y fuentes utilizadas. No se emiten documentos presupuestales ficticios ni se ejecutan pagos.
 
+Compensatorios: registro y cálculo técnico del tiempo trabajado, revisión de soportes, bandeja de responsables, autorización expresa del reconocimiento, solicitud, verificación de saldo, autorización del disfrute, calendario, programación, historial documental y libro inmutable de créditos/débitos en minutos. Las versiones provisionales no generan movimientos. Las reglas configurables exigen habilitación, equivalencia, límites, requisitos y condiciones verificadas.
+
 Administración: configuración inicial sin contraseña fija, roles explícitos, altas, cambio de permisos, desactivación, restablecimiento de contraseña, cambio personal de clave, bloqueo temporal por intentos fallidos, versiones normativas y de tarifas aprobadas por autoridad, y auditoría de accesos y actuaciones.
 
 Seguimiento: bandeja por rol, indicadores por módulo, alertas de documentos faltantes, correcciones, vencimientos de etapas e hitos configurados. Los recordatorios se presentan en la aplicación; no se envían correos ni mensajes externos.
 
 ## Migraciones
 
-Se creó y aplicó `core/0001_initial`, además de las migraciones estándar de autenticación, sesiones y tipos de contenido de Django. `makemigrations --check --dry-run` no detectó cambios pendientes. Las claves relacionadas usan protección de borrado; no existen operaciones de borrado histórico en la interfaz.
+Se crearon `core/0001_initial` y `core/0002_alter_case_kind_alter_policyversion_kind_and_more`, además de las migraciones estándar de autenticación, sesiones y tipos de contenido de Django. `makemigrations --check --dry-run` no detecta cambios pendientes. Las claves relacionadas usan protección de borrado; no existen operaciones de borrado histórico en la interfaz.
 
 ## Verificación
 
-- Suite de pruebas: **41 pruebas aprobadas**, con base aislada que se destruye al finalizar.
+- Suite de pruebas: **43 pruebas aprobadas**, con base aislada que se destruye al finalizar.
+- El recorrido de compensatorios verifica crédito y débito autorizados, saldo, calendario e historial. Otra prueba confirma que una versión provisional no puede reconocer tiempo ni crear movimientos.
 - Los dos procedimientos se recorren completos tanto mediante servicios como mediante POST de los formularios HTTP reales. Se verifican documentos, presupuesto, liquidación, pagos, legalización, conciliación, cierre e historial.
 - Se prueban documentación y campos faltantes, superposición de fechas, devoluciones y reenvío, actores autorizados y no autorizados, certificados restringidos, archivos con firma/extensión inválida y exceso de tamaño, solicitudes obsoletas, pagos duplicados/futuros/excesivos, reconocimientos adicionales, saldos pendientes, nuevas conciliaciones, escalas inaplicables, RP insuficiente, CSV filtrado, CSRF, acceso inicial, Scrypt, cambio de contraseña, cierre de sesión y usuarios inactivos.
 - `manage.py check`: sin incidencias.
@@ -61,6 +64,7 @@ Es necesario confirmar:
 6. Escalas, factores por pernoctación/destino y reglas de liquidación de días y transporte. La fórmula técnica requiere contraste institucional antes de registrar tarifas aprobadas.
 7. Condiciones para cierres con reconocimiento parcial o rechazo de EPS/ARL, castigo de cartera, compensaciones, ajustes bancarios, anulaciones y mayores gastos de viaje. Se mantienen bloqueados los cierres descuadrados; no hay un mecanismo para borrar pagos o condonar saldos.
 8. Retención documental, clasificación de información, accesos clínicos, política de respaldos y requisitos de firma y archivo institucional.
+9. Para compensatorios: población cubierta, hechos generadores, autorización previa, equivalencias, redondeos, límites, vigencia de saldos, responsables, plazos, cancelaciones y cruces con vacaciones, incapacidades y comisiones. Véase [decisiones-pendientes-compensatorios.md](decisiones-pendientes-compensatorios.md).
 
 Los parámetros permiten reasignar responsables, agregar documentos y definir plazos e hitos sin modificar versiones históricas. No permiten alterar arbitrariamente el orden del flujo o eliminar controles. Si las fuentes exigen otra secuencia o excepciones, habrá que ajustar y volver a probar el motor antes de aprobarlo.
 

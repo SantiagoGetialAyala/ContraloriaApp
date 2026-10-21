@@ -3,7 +3,11 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
-KINDS = [('incapacidad', 'Incapacidades'), ('viatico', 'Viáticos')]
+KINDS = [
+    ('incapacidad', 'Incapacidades'),
+    ('viatico', 'Viáticos'),
+    ('compensatorio', 'Gestión de compensatorios'),
+]
 ROLES = [('solicitante', 'Funcionario / solicitante'), ('talento', 'Talento Humano'), ('juridica', 'Asesoría Jurídica'), ('tesoreria', 'Tesorería'), ('contabilidad', 'Contabilidad'), ('presupuesto', 'Presupuesto'), ('secretaria', 'Secretaría de Despacho'), ('autoridad', 'Contralor / autoridad competente'), ('control', 'Control Interno'), ('administrador', 'Administrador del sistema')]
 
 class Profile(models.Model):
@@ -62,7 +66,8 @@ class Case(models.Model):
         indexes = [models.Index(fields=['kind', 'stage']), models.Index(fields=['owner', 'created_at'])]
     @property
     def reference(self):
-        return ('INC' if self.kind == 'incapacidad' else 'VIA') + '-' + str(self.id)[:8].upper()
+        prefixes = {'incapacidad': 'INC', 'viatico': 'VIA', 'compensatorio': 'COM'}
+        return prefixes.get(self.kind, 'EXP') + '-' + str(self.id)[:8].upper()
 
 class Document(models.Model):
     case = models.ForeignKey(Case, on_delete=models.PROTECT, related_name='documents')
@@ -89,6 +94,26 @@ class FinancialEntry(models.Model):
     class Meta:
         constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name='entry_positive'), models.UniqueConstraint(fields=['case', 'kind', 'reference'], name='unique_payment_reference')]
         ordering = ['created_at']
+
+
+class CompensatoryLedgerEntry(models.Model):
+    """Immutable minute ledger; entries only arise from explicit authorized transitions."""
+
+    employee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='compensatory_ledger')
+    case = models.ForeignKey(Case, on_delete=models.PROTECT, related_name='compensatory_entries')
+    kind = models.CharField(max_length=10, choices=[('credito', 'Tiempo reconocido'), ('debito', 'Compensatorio autorizado')])
+    minutes = models.PositiveIntegerField()
+    effective_on = models.DateField()
+    rule_reference = models.CharField(max_length=200)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='authorized_compensatory_entries')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(minutes__gt=0), name='compensatory_minutes_positive'),
+            models.UniqueConstraint(fields=['case', 'kind'], name='unique_compensatory_entry_per_case_kind'),
+        ]
+        ordering = ['effective_on', 'created_at', 'id']
 
 class Event(models.Model):
     case = models.ForeignKey(Case, on_delete=models.PROTECT, related_name='events', null=True)

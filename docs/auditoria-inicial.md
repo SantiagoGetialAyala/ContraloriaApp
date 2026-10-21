@@ -50,3 +50,11 @@ Se inspeccionó el directorio de trabajo y se leyó el prompt adjunto. No se eje
 ## Actualización después de la autorización de construcción desde cero
 
 El usuario autorizó expresamente crear el proyecto completo desde cero. El estado anterior describe la inspección inicial, no el resultado final. Ya existe una aplicación Django con los flujos técnicos, persistencia, interfaz y pruebas. Véanse [la entrega](entrega.md), [la arquitectura](arquitectura.md) y [la matriz actualizada](matriz-trazabilidad.md). La falta de resoluciones oficiales sigue vigente.
+
+## Auditoría de continuidad · 20 de octubre de 2026
+
+Se revisaron modelos, migraciones, motor de estados, servicios transaccionales, acceso documental, formularios, vistas, rutas, plantillas y 41 pruebas existentes. La línea base aprobó `manage.py check`, `makemigrations --check --dry-run` y las 41 pruebas antes de modificar el proyecto.
+
+No se encontraron archivos PDF, DOCX, ODT, XLSX o XLS con los documentos oficiales dentro del repositorio. Por ello no fue posible certificar que la secuencia, responsables, plazos o documentos de incapacidades, recobros y viáticos coincidan con sus fuentes. La implementación existente sí conserva controles técnicos de rol, soportes, concurrencia, saldos y cierre, y su suite de regresión continuó aprobando después de integrar el tercer módulo.
+
+La brecha estructural encontrada era la ausencia del tipo de expediente de compensatorios, de estados propios, de transiciones configurables, de un saldo auditable en unidades de tiempo y de calendario. Se implementaron estos componentes con bloqueo por defecto. El procedimiento propuesto y las decisiones institucionales pendientes se documentan en [decisiones-pendientes-compensatorios.md](decisiones-pendientes-compensatorios.md).

@@ -16,7 +16,7 @@
 
 ## Persistencia
 
-Un usuario tiene perfil y roles de Django. Un expediente pertenece a un solicitante, conserva la dependencia de apertura y referencia una versión del procedimiento. Sus documentos, actuaciones y movimientos financieros se relacionan con claves protegidas frente al borrado en cascada. Cada movimiento referencia un soporte del mismo expediente y un responsable.
+Un usuario tiene perfil y roles de Django. Un expediente pertenece a un solicitante, conserva la dependencia de apertura y referencia una versión del procedimiento. Sus documentos, actuaciones, movimientos financieros y movimientos de tiempo se relacionan con claves protegidas frente al borrado en cascada. Cada movimiento conserva expediente, responsable y regla aplicada.
 
 Los documentos conservan contenido, nombre saneado, tipo detectado por firma, tamaño, hash y autor. Se aceptan PDF, PNG y JPG de hasta 8 MB. Las descargas y vistas requieren autenticación, visibilidad del expediente y permiso documental; nunca se sirven desde una carpeta pública. La vista directa añade sandbox al contenido. La validación de firma de archivo no equivale a un análisis antivirus ni a validación criptográfica de firmas administrativas.
 
@@ -31,6 +31,21 @@ No se revierte un pago por una devolución. Una legalización sí puede devolver
 Los cambios llevan una revisión incremental del expediente. Una escritura con revisión obsoleta se rechaza. Las operaciones usan transacciones `IMMEDIATE` de SQLite y bloqueo mediante ORM, evitando pagos simultáneos que superen los topes y registros duplicados en la aplicación local.
 
 Las fuentes oficiales faltan: estas secuencias son propuestas técnicas.
+
+El prototipo de compensatorios usa el mismo motor y admite responsables y transiciones versionados. Por seguridad, las transiciones configuradas solo pueden seguir aristas que no omitan controles obligatorios. La ruta propuesta es:
+
+```mermaid
+flowchart LR
+ A[Registro de tiempo y soporte] --> B[Revisión de soportes]
+ B --> C[Autorización expresa del reconocimiento]
+ C --> D[Solicitud de compensatorio]
+ D --> E[Validación de saldo]
+ E --> F[Autorización expresa del disfrute]
+ F --> G[Calendario y programación]
+ G --> H[Cierre]
+```
+
+Esta ruta no es un procedimiento oficial. Una versión provisional nunca genera movimientos. El crédito se crea al completar `autorizacion_tiempo`, solamente si la versión está confirmada y `compensatory_rules.enabled` es verdadero. El débito se crea al completar `autorizacion_compensatorio`, tras comprobar saldo y superposiciones. El libro mayor es inmutable y tiene una restricción de un crédito y un débito por expediente.
 
 ```mermaid
 flowchart LR
@@ -94,4 +109,4 @@ Todos los cambios exigen POST, sesión válida y CSRF. Las descargas, consultas 
 | `/parametros/` | Versiones de procedimiento y escalas. |
 | `/procedimientos/` | Matriz de etapas y responsables propuestos. |
 
-`kind` admite `incapacidad` y `viatico`. Los endpoints devuelven HTML con formularios y redirecciones; no constituyen una API REST pública.
+`kind` admite `incapacidad`, `viatico` y `compensatorio`. `/compensatorios/calendario/` presenta solo solicitudes con débito autorizado y respeta la visibilidad de expedientes. Los endpoints devuelven HTML con formularios y redirecciones; no constituyen una API REST pública.
