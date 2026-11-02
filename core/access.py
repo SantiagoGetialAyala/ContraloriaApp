@@ -3,7 +3,7 @@ from django.core.exceptions import PermissionDenied
 from .models import Case
 from .workflows import role_names
 
-MEDICAL = {'certificado'}
+MEDICAL = {'certificado', 'epicrisis'}
 FINANCE = {'pago_funcionario', 'recuperacion', 'comunicacion_financiera', 'registro_contable', 'conciliacion', 'gestion_saldos', 'solicitud_cdp', 'solicitud_rp', 'cdp', 'rp', 'liquidacion', 'orden_pago', 'desembolso', 'gastos', 'reintegro', 'cierre', 'acto_firmado', 'autorizacion_comision', 'soporte_solicitud'}
 
 

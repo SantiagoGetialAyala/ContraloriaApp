@@ -7,7 +7,7 @@ from .models import ROLES, Profile, TravelScale, KINDS
 from .workflows import FIELDS, DOCS
 
 BASE_FIELDS = {
-    'incapacidad': ['start_date', 'end_date', 'leave_type', 'entity', 'observations'],
+    'incapacidad': ['start_date', 'end_date', 'leave_type', 'incapacity_number', 'radication_number', 'epicrisis_radication', 'entity', 'observations'],
     'viatico': ['start_date', 'end_date', 'purpose', 'destination', 'category', 'overnight', 'transport', 'observations'],
     'compensatorio': ['work_date', 'work_start', 'work_end', 'break_minutes', 'activity_description', 'observations'],
 }

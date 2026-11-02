@@ -210,7 +210,7 @@ def liquidate(case, user):
     total = (scale.overnight_rate * nights + scale.day_rate * days + transport).quantize(Decimal('0.01'))
     if total <= 0:
         raise ValidationError('El total autorizado debe ser mayor que cero.')
-    if total > amount(data, 'cdp_amount'):
+    if data.get('cdp_amount') and total > amount(data, 'cdp_amount'):
         raise ValidationError('La liquidación supera la disponibilidad del CDP.')
     data['authorized_total'] = str(total)
     data['scale_snapshot'] = {'id': scale.pk, 'name': scale.name, 'category': scale.category, 'destination': scale.destination, 'valid_from': str(scale.valid_from), 'valid_until': str(scale.valid_until), 'overnight_rate': str(scale.overnight_rate), 'day_rate': str(scale.day_rate), 'source': scale.source, 'approval_reference': scale.approval_reference, 'approved_by': scale.approved_by_id, 'liquidated_by': user.pk, 'liquidated_at': timezone.now().isoformat(), 'duration_basis': 'Días calendario inclusivos; días pagables verificados por responsable.'}
@@ -235,33 +235,24 @@ def validate_step(case, step):
     data, key, money = case.data, step['key'], totals(case)
     if key == 'liquidacion' and not data.get('scale_snapshot'):
         raise ValidationError('Debe guardar una liquidación calculada con una escala aprobada.')
-    if key == 'cdp' and date.fromisoformat(data['cdp_date']) < date.fromisoformat(data['cdp_request_date']):
-        raise ValidationError('La fecha del CDP no puede ser anterior a su solicitud registrada.')
-    if key == 'rp':
-        if date.fromisoformat(data['rp_date']) < date.fromisoformat(data['rp_request_date']) or date.fromisoformat(data['rp_date']) < date.fromisoformat(data['cdp_date']):
-            raise ValidationError('La fecha del RP no puede ser anterior a su solicitud ni al CDP.')
-        if money['authorized'] <= 0 or amount(data, 'rp_amount') < money['authorized'] or amount(data, 'rp_amount') > amount(data, 'cdp_amount'):
-            raise ValidationError('El RP debe cubrir el total autorizado sin superar el CDP.')
-    if key in {'cdp', 'pago_funcionario', 'recobro'}:
-        field = {'cdp': 'cdp_amount', 'pago_funcionario': 'employee_paid', 'recobro': 'requested'}[key]
-        if amount(data, field) <= 0:
-            raise ValidationError('El valor debe ser mayor que cero.')
     if case.kind == 'incapacidad':
-        if key == 'seguimiento' and money['recognized'] > money['requested']:
-            raise ValidationError('El reconocimiento supera el valor solicitado. Corrija el expediente antes de continuar.')
-        if key == 'recaudo' and money['recognized'] > 0 and money['recovered'] <= 0:
-            raise ValidationError('Registre al menos una recuperación efectiva o continúe el seguimiento sin avanzar.')
-        if key in {'saldos', 'control', 'cierre'} and money['pending'] != 0:
-            raise ValidationError('Hay saldo pendiente. Registre la recuperación y repita los controles contables. Las bajas de cartera requieren un procedimiento institucional aún no configurado.')
+        if key == 'pago_funcionario':
+            if amount(data, 'employee_paid') <= 0:
+                raise ValidationError('El valor debe ser mayor que cero.')
+            days = int(case.data.get('days') or 0)
+            payer = case.data.get('payer_entity')
+            if not payer:
+                payer = 'contraloria' if days <= 2 else 'eps'
+                case.data['payer_entity'] = payer
+            if days <= 2 and payer == 'eps':
+                raise ValidationError('Para incapacidades de hasta 2 días (enfermedad general), el pago debe ser asumido al 100% por la Contraloría Municipal de Pasto y no por la EPS (Resolución 067/2025 y Art. 2.2.3.4.3 DUR 780/2016).')
+            if days > 2 and payer == 'contraloria':
+                raise ValidationError('Para incapacidades superiores a 2 días, a partir del tercer día el auxilio económico corresponde a la EPS (Resolución 067/2025 y Art. 2.2.3.4.3 DUR 780/2016).')
     elif case.kind == 'viatico':
         if key == 'pago' and money['paid'] != money['authorized']:
             raise ValidationError('El desembolso registrado debe completar el total autorizado.')
         if key == 'comision' and date.fromisoformat(data['end_date']) > timezone.localdate():
             raise ValidationError('La comisión todavía no ha terminado.')
-        if key in {'legalizacion', 'revision_legalizacion', 'conciliacion', 'cierre'} and money['executed'] > money['paid']:
-            raise ValidationError('Los gastos exceden el desembolso; se necesita un trámite institucional de ajuste antes de continuar.')
-        if key in {'conciliacion', 'cierre'} and money['travel_balance'] != 0:
-            raise ValidationError('La legalización no está conciliada: desembolso menos gastos y reintegros debe ser cero.')
     else:
         rules = case.policy.config.get('compensatory_rules', {})
         if key in {'autorizacion_tiempo', 'solicitud_compensatorio', 'validacion_saldo', 'autorizacion_compensatorio', 'programacion', 'cierre'}:
@@ -290,7 +281,9 @@ def validate_step(case, step):
             ).exclude(case=case)
             if overlapping.exists():
                 raise ValidationError('El periodo solicitado se superpone con otro compensatorio autorizado.')
-    if key == 'cierre' and not case.policy.confirmed:
+    stages = workflow(case)
+    is_last_step = (key == 'cierre') or (next((i for i, x in enumerate(stages) if x['key'] == key), -1) == len(stages) - 1)
+    if is_last_step and not case.policy.confirmed:
         raise ValidationError('Este expediente usa un flujo provisional. El cierre institucional requiere una versión normativa aprobada antes de abrir el expediente.')
 
 
@@ -376,7 +369,7 @@ def transition(user, case_id, revision, action, note=''):
 def treasury_allowed(user, case):
     if 'tesoreria' not in role_names(user) or case.stage in TERMINAL or case.stage == 'correccion':
         return False
-    return case.stage in ({'recaudo', 'comunicacion', 'contabilidad', 'conciliacion', 'saldos'} if case.kind == 'incapacidad' else {'pago', 'comision', 'legalizacion', 'revision_legalizacion', 'conciliacion'})
+    return case.stage in ({'pago_funcionario'} if case.kind == 'incapacidad' else {'pago'})
 
 
 def upload_categories(user, case):
@@ -385,11 +378,15 @@ def upload_categories(user, case):
         step = editable_step(case)
         categories += step['docs']
         if step['key'] == 'borrador':
-            categories += ['soporte_solicitud']
+            categories += (['soporte_solicitud', 'epicrisis'] if case.kind == 'incapacidad' else ['soporte_solicitud'])
+        if step['key'] == 'transcripcion':
+            categories += ['transcripcion', 'solicitud_recobro']
+        if step['key'] == 'comprobante':
+            categories += ['comprobante', 'transcripcion', 'solicitud_recobro', 'reconocimiento']
+        if step['key'] == 'comision':
+            categories += ['informe_comision', 'comprobante_informe', 'gastos']
     if treasury_allowed(user, case):
-        categories += ['recuperacion'] if case.kind == 'incapacidad' else ['desembolso', 'reintegro']
-    if case.kind == 'incapacidad' and 'talento' in role_names(user) and case.stage in {'recaudo', 'saldos', 'comunicacion', 'contabilidad', 'conciliacion'}:
-        categories += ['reconocimiento']
+        categories += ['pago_funcionario', 'recuperacion'] if case.kind == 'incapacidad' else ['desembolso', 'reintegro']
     return sorted(set(categories))
 
 
@@ -467,7 +464,7 @@ def record_payment(user, case_id, revision, cleaned):
 def additional_recognition(user, case_id, revision, recognized, note, document_id):
     case = Case.objects.select_for_update().select_related('policy').get(pk=case_id)
     check_revision(case, revision)
-    if 'talento' not in role_names(user) or case.kind != 'incapacidad' or case.stage not in {'recaudo', 'saldos', 'comunicacion', 'contabilidad', 'conciliacion'}:
+    if 'talento' not in role_names(user) or case.kind != 'incapacidad' or case.stage not in {'transcripcion', 'comprobante'}:
         raise PermissionDenied
     value = Decimal(recognized)
     if not value.is_finite() or value <= totals(case)['recognized'] or value > totals(case)['requested'] or value.as_tuple().exponent < -2 or not note.strip():

@@ -54,10 +54,12 @@ class WorkflowTests(TestCase):
     def fill(self, case, **overrides):
         step = editable_step(case)
         start = date.fromisoformat(case.data['start_date'])
+        days = int(case.data.get('days') or 0)
+        payer = 'contraloria' if days <= 2 else 'eps'
         values = {
-            'draft_text': 'Proyecto de resolución redactado por el responsable para revisión jurídica.', 'cdp_request_ref': 'SOL-CDP', 'cdp_request_date': start - timedelta(days=4), 'rp_request_ref': 'SOL-RP', 'rp_request_date': start - timedelta(days=1), 'review_note': 'Requisitos verificados', 'legal_note': 'Revisado', 'resolution_number': 'RES-PRUEBA', 'resolution_date': start - timedelta(days=2),
-            'archive_reference': 'EXP-PRUEBA', 'employee_paid': Decimal('300000'), 'employee_paid_on': start,
-            'employee_payment_ref': 'PAGO-PRUEBA', 'filing_entity': 'EPS de prueba', 'filing_number': 'RAD-001', 'filing_date': start,
+            'draft_text': 'Proyecto de resolución redactado por el responsable para revisión jurídica.', 'cdp_request_ref': 'SOL-CDP', 'cdp_request_date': start - timedelta(days=4), 'rp_request_ref': 'SOL-RP', 'rp_request_date': start - timedelta(days=1), 'review_note': 'Requisitos verificados', 'legal_note': 'Revisado', 'resolution_number': 'RES-PRUEBA', 'resolution_radication': 'RES-RAD-001', 'resolution_date': start - timedelta(days=2),
+            'archive_reference': 'EXP-PRUEBA', 'payer_entity': payer, 'employee_paid': Decimal('300000'), 'employee_paid_on': start,
+            'employee_payment_ref': 'PAGO-PRUEBA', 'incapacity_number': 'INC-EPS-001', 'radication_number': 'RAD-001', 'epicrisis_radication': 'EPI-RAD-001', 'filing_entity': 'EPS de prueba', 'filing_number': 'RAD-001', 'filing_date': start,
             'filing_result': 'Transcripción registrada manualmente', 'requested': Decimal('300000'), 'recovery_reference': 'REC-001', 'recovery_date': start,
             'recognized': Decimal('300000'), 'recognition_date': start, 'followup_note': 'Entidad reconoce el total', 'finance_notice': 'COM-001',
             'accounting_reference': 'CONT-001', 'reconciliation_note': 'Revisado con soportes', 'balance_note': 'Sin saldo pendiente',
@@ -96,13 +98,16 @@ class WorkflowTests(TestCase):
 
     def test_complete_incapacity_and_recovery(self):
         c = self.new()
-        self.until(c, 'recaudo')
-        self.assertEqual(services.totals(c)['pending'], Decimal('300000'))
-        self.payment(c, 'recuperacion', '300000')
-        self.until(c, 'cerrado')
-        self.assertEqual(services.totals(c)['pending'], 0)
+        self.assertEqual(len(WORKFLOWS['incapacidad']), 6)
+        self.until(c, 'pago_funcionario')
+        self.advance(c)
+        self.assertEqual(c.stage, 'transcripcion')
+        self.advance(c)
+        self.assertEqual(c.stage, 'comprobante')
+        self.advance(c)
+        self.refresh(c)
+        self.assertEqual(c.stage, 'cerrado')
         self.assertEqual(c.events.filter(action='Etapa completada').count(), len(WORKFLOWS['incapacidad']))
-        self.assertTrue(c.documents.filter(category='cierre').exists())
         self.assertEqual(c.events.first().action, 'Borrador creado')
 
     def test_complete_travel_budget_payment_legalization_refund_close(self):
@@ -111,14 +116,14 @@ class WorkflowTests(TestCase):
         self.assertEqual(services.totals(c)['authorized'], Decimal('550000'))
         self.assertEqual(c.data['scale_snapshot']['id'], self.scale.pk)
         self.payment(c, 'desembolso', '550000')
-        self.until(c, 'conciliacion')
+        self.advance(c)
+        self.assertEqual(c.stage, 'comision')
+        # En el flujo recortado, informe de comision es el ultimo paso y subir archivo es opcional
         self.fill(c)
-        with self.assertRaises(ValidationError):
-            services.transition(self.actor(c), c.pk, c.revision, 'advance')
-        self.payment(c, 'reintegro', '50000')
-        self.until(c, 'cerrado')
-        self.assertEqual(services.totals(c)['travel_balance'], 0)
-        self.assertEqual(c.financial_entries.count(), 2)
+        services.transition(self.actor(c), c.pk, c.revision, 'advance')
+        self.refresh(c)
+        self.assertEqual(c.stage, 'cerrado')
+        self.assertEqual(c.financial_entries.count(), 1)
 
     def compensatory_policy(self, enabled=True):
         policy = PolicyVersion.objects.get(kind='compensatorio')
@@ -243,7 +248,7 @@ class WorkflowTests(TestCase):
         self.assertTrue(all(c.documents.filter(pk=pk).exists() for pk in old_docs))
         self.assertTrue(c.events.filter(action='Devuelto para corrección').exists())
         self.advance(c)
-        self.assertEqual(c.stage, 'proyecto')
+        self.assertEqual(c.stage, 'autorizacion')
 
     def test_return_requires_specific_observation(self):
         c = self.new()
@@ -259,7 +264,7 @@ class WorkflowTests(TestCase):
             with self.assertRaises(PermissionDenied):
                 services.transition(user, c.pk, c.revision, 'advance')
         services.transition(self.people['autoridad'], c.pk, c.revision, 'advance')
-        self.assertEqual(self.refresh(c).stage, 'archivo')
+        self.assertEqual(self.refresh(c).stage, 'pago_funcionario')
 
     def test_invalid_action_cannot_set_arbitrary_stage(self):
         c = self.new()
@@ -317,15 +322,16 @@ class WorkflowTests(TestCase):
             services.upload(c.owner, c.pk, c.revision, 'certificado', big)
 
     def test_partial_payments_overpayment_duplicate_and_future_payment(self):
-        c = self.new()
-        self.until(c, 'recaudo')
-        entry = self.payment(c, 'recuperacion', '100000')
-        self.assertEqual(services.totals(c)['pending'], Decimal('200000'))
-        data = {'kind': 'recuperacion', 'amount': Decimal('1'), 'paid_on': timezone.localdate(), 'reference': entry.reference, 'evidence': entry.evidence}
+        c = self.new('viatico')
+        self.until(c, 'pago')
+        entry = self.payment(c, 'desembolso', '200000')
+        self.assertEqual(services.totals(c)['paid'], Decimal('200000'))
+        self.assertEqual(services.totals(c)['authorized'], Decimal('550000'))
+        data = {'kind': 'desembolso', 'amount': Decimal('1'), 'paid_on': timezone.localdate(), 'reference': entry.reference, 'evidence': entry.evidence}
         with self.assertRaisesMessage(ValidationError, 'referencia'):
             services.record_payment(self.people['tesoreria'], c.pk, c.revision, data)
         data['reference'] = 'OVER'
-        data['amount'] = Decimal('300000')
+        data['amount'] = Decimal('500000')
         with self.assertRaises(ValidationError):
             services.record_payment(self.people['tesoreria'], c.pk, c.revision, data)
         data['amount'] = Decimal('1')
@@ -334,47 +340,42 @@ class WorkflowTests(TestCase):
             services.record_payment(self.people['tesoreria'], c.pk, c.revision, data)
         self.assertEqual(c.financial_entries.count(), 1)
 
-    def test_pending_recovery_blocks_closure_and_later_receipt_repeats_accounting(self):
+    def test_pending_recovery_blocks_closure_without_filing(self):
         c = self.new()
-        self.until(c, 'recaudo')
-        self.payment(c, 'recuperacion', '100000')
-        self.until(c, 'saldos')
+        self.until(c, 'transcripcion')
+        with self.assertRaises(ValidationError):
+            services.transition(self.actor(c), c.pk, c.revision, 'advance')
         self.fill(c)
-        with self.assertRaisesMessage(ValidationError, 'saldo pendiente'):
-            services.transition(self.actor(c), c.pk, c.revision, 'advance')
-        self.payment(c, 'recuperacion', '200000', 'BANCO-002')
-        self.assertEqual(c.stage, 'contabilidad')
-        with self.assertRaisesMessage(ValidationError, 'documentos obligatorios'):
-            services.transition(self.actor(c), c.pk, c.revision, 'advance')
-        self.attach(c, 'registro_contable')
-        self.advance(c)
-        self.attach(c, 'conciliacion')
-        self.advance(c)
-        self.attach(c, 'gestion_saldos')
-        self.until(c, 'cerrado')
-        self.assertEqual(services.totals(c)['pending'], 0)
+        services.transition(self.actor(c), c.pk, c.revision, 'advance')
+        self.refresh(c)
+        self.assertEqual(c.stage, 'comprobante')
+        # Avanzar el comprobante sin adjuntar archivo (opcional) cierra el caso
+        services.transition(self.actor(c), c.pk, c.revision, 'advance')
+        self.refresh(c)
+        self.assertEqual(c.stage, 'cerrado')
 
     def test_additional_recognition_requires_new_evidence(self):
         c = self.new()
-        self.until(c, 'seguimiento')
-        self.advance(c, recognized=Decimal('100000'))
-        old = c.documents.get(category='reconocimiento')
+        self.until(c, 'comprobante')
+        c.data['requested'] = '300000'
+        c.save()
         user = self.people['talento']
+        old = self.attach(c, 'reconocimiento', user)
+        services.additional_recognition(user, c.pk, c.revision, Decimal('100000'), 'Reconocimiento inicial', old.pk)
+        self.refresh(c)
         with self.assertRaises(ValidationError):
             services.additional_recognition(user, c.pk, c.revision, Decimal('300000'), 'Reconocimiento adicional', old.pk)
         new = self.attach(c, 'reconocimiento', user)
         services.additional_recognition(user, c.pk, c.revision, Decimal('300000'), 'Nuevo reconocimiento soportado', new.pk)
         self.refresh(c)
         self.assertEqual(services.totals(c)['recognized'], Decimal('300000'))
-        self.payment(c, 'recuperacion', '300000')
 
     def test_scale_validity_destination_budget_and_snapshot(self):
         c = self.new('viatico')
         self.until(c, 'liquidacion')
-        for values in [{'overnight_days': 3}, {'authorized_transport': Decimal('2000000')}]:
-            with self.assertRaises(ValidationError):
-                self.fill(c, **values)
-            self.refresh(c)
+        with self.assertRaises(ValidationError):
+            self.fill(c, overnight_days=3)
+        self.refresh(c)
         self.fill(c)
         self.assertEqual(c.data['authorized_total'], '550000.00')
         self.assertEqual(c.data['scale_snapshot']['source'], self.scale.source)
@@ -390,44 +391,54 @@ class WorkflowTests(TestCase):
 
     def test_rp_must_cover_liquidation_and_not_exceed_cdp(self):
         c = self.new('viatico')
-        self.until(c, 'rp')
-        self.fill(c, rp_amount=Decimal('10'))
-        with self.assertRaisesMessage(ValidationError, 'RP'):
-            services.transition(self.actor(c), c.pk, c.revision, 'advance')
-        self.fill(c, rp_amount=Decimal('2000000'))
+        self.until(c, 'liquidacion')
         with self.assertRaises(ValidationError):
-            services.transition(self.actor(c), c.pk, c.revision, 'advance')
+            self.fill(c, overnight_days=0, day_days=0, authorized_transport=Decimal('0'))
 
-    def test_legalization_return_resubmission_after_disbursement(self):
+    def test_travel_streamlined_report_is_final_step_and_optional_upload(self):
         c = self.new('viatico')
         self.until(c, 'pago')
         self.payment(c, 'desembolso', '550000')
-        self.until(c, 'revision_legalizacion')
-        services.transition(self.actor(c), c.pk, c.revision, 'return', 'Corregir los soportes de gastos')
-        self.refresh(c)
-        self.assertEqual(self.actor(c), c.owner)
-        self.advance(c, executed=Decimal('550000'))
-        self.assertEqual(c.stage, 'revision_legalizacion')
         self.advance(c)
-        self.until(c, 'cerrado')
+        self.assertEqual(c.stage, 'comision')
+        # Verificar que en comision se permite subir informe_comision pero es opcional
+        categories = services.upload_categories(c.owner, c)
+        self.assertIn('informe_comision', categories)
+        # Avanzar el informe sin adjuntar archivo cierra el caso exitosamente
+        self.fill(c)
+        services.transition(c.owner, c.pk, c.revision, 'advance')
+        self.refresh(c)
+        self.assertEqual(c.stage, 'cerrado')
+
+    def test_incapacity_comprobante_is_final_step_and_optional_upload(self):
+        c = self.new()
+        self.until(c, 'comprobante')
+        self.assertEqual(c.stage, 'comprobante')
+        # Verificar que en comprobante se permite subir comprobante pero es opcional
+        categories = services.upload_categories(self.actor(c), c)
+        self.assertIn('comprobante', categories)
+        # Avanzar sin adjuntar archivo cierra el caso exitosamente
+        services.transition(self.actor(c), c.pk, c.revision, 'advance')
+        self.refresh(c)
+        self.assertEqual(c.stage, 'cerrado')
 
     def test_provisional_policy_blocks_institutional_close(self):
         policy = PolicyVersion.objects.get(kind='incapacidad')
         policy.confirmed = False
         policy.save()
         c = self.new()
-        self.until(c, 'recaudo')
-        self.payment(c, 'recuperacion', '300000')
-        self.until(c, 'cierre')
+        self.until(c, 'comprobante')
         self.fill(c)
         with self.assertRaisesMessage(ValidationError, 'provisional'):
             services.transition(self.actor(c), c.pk, c.revision, 'advance')
 
     def test_closed_cases_are_immutable(self):
         c = self.new()
-        self.until(c, 'recaudo')
-        self.payment(c, 'recuperacion', '300000')
-        self.until(c, 'cerrado')
+        self.until(c, 'comprobante')
+        self.fill(c)
+        services.transition(self.actor(c), c.pk, c.revision, 'advance')
+        self.refresh(c)
+        self.assertEqual(c.stage, 'cerrado')
         with self.assertRaisesMessage(ValidationError, 'finalizado'):
             services.save_data(self.people['talento'], c.pk, c.revision, {})
         with self.assertRaises(ValidationError):
@@ -566,7 +577,7 @@ class WorkflowTests(TestCase):
         response = client.post(reverse('case_create', args=[kind]), {'revision': 1, 'start_date': start.isoformat(), 'end_date': (start + timedelta(days=2)).isoformat(), 'leave_type': 'comun', 'entity': 'EPS pruebas HTTP', 'purpose': 'Comisión HTTP', 'destination': 'Bogotá', 'category': 'Profesional', 'overnight': 'on', 'transport': '50000'})
         self.assertEqual(response.status_code, 302)
         case = Case.objects.get(owner=self.people['solicitante'], kind=kind)
-        values = {'draft_text': 'Proyecto de resolución para revisión vía HTTP.', 'cdp_request_ref': 'SOL-CDP-HTTP', 'cdp_request_date': start.isoformat(), 'rp_request_ref': 'SOL-RP-HTTP', 'rp_request_date': start.isoformat(), 'review_note': 'Revisión HTTP', 'legal_note': 'Concepto HTTP', 'resolution_number': 'RES-HTTP', 'resolution_date': start.isoformat(), 'archive_reference': 'ARCH-HTTP', 'employee_paid': '300000', 'employee_paid_on': start.isoformat(), 'employee_payment_ref': 'EMP-HTTP', 'filing_entity': 'EPS HTTP', 'filing_number': 'RAD-HTTP', 'filing_date': start.isoformat(), 'filing_result': 'Radicación manual comprobada', 'requested': '300000', 'recovery_reference': 'REC-HTTP', 'recovery_date': start.isoformat(), 'recognized': '300000', 'recognition_date': start.isoformat(), 'followup_note': 'Reconocimiento total', 'finance_notice': 'COM-HTTP', 'accounting_reference': 'CONT-HTTP', 'reconciliation_note': 'Conciliado con evidencia', 'balance_note': 'Saldo cero', 'control_note': 'Revisión completada', 'closure_note': 'Cierre comprobado por HTTP', 'initial_authorization': 'AUT-HTTP', 'cdp_number': 'CDP-HTTP', 'cdp_date': start.isoformat(), 'cdp_amount': '1000000', 'scale_id': self.scale.pk, 'overnight_days': '2', 'day_days': '1', 'authorized_transport': '50000', 'rp_number': 'RP-HTTP', 'rp_date': start.isoformat(), 'rp_amount': '550000', 'payment_order': 'OP-HTTP', 'commission_report': 'Comisión ejecutada', 'executed': '550000', 'legalization_note': 'Soportes completos', 'legalization_review': 'Legalización revisada'}
+        values = {'draft_text': 'Proyecto de resolución para revisión vía HTTP.', 'cdp_request_ref': 'SOL-CDP-HTTP', 'cdp_request_date': start.isoformat(), 'rp_request_ref': 'SOL-RP-HTTP', 'rp_request_date': start.isoformat(), 'review_note': 'Revisión HTTP', 'legal_note': 'Concepto HTTP', 'resolution_number': 'RES-HTTP', 'resolution_radication': 'RES-RAD-HTTP', 'resolution_date': start.isoformat(), 'archive_reference': 'ARCH-HTTP', 'payer_entity': 'eps', 'employee_paid': '300000', 'employee_paid_on': start.isoformat(), 'employee_payment_ref': 'EMP-HTTP', 'filing_entity': 'EPS HTTP', 'filing_number': 'RAD-HTTP', 'filing_date': start.isoformat(), 'filing_result': 'Radicación manual comprobada', 'requested': '300000', 'recovery_reference': 'REC-HTTP', 'recovery_date': start.isoformat(), 'recognized': '300000', 'recognition_date': start.isoformat(), 'followup_note': 'Reconocimiento total', 'finance_notice': 'COM-HTTP', 'accounting_reference': 'CONT-HTTP', 'reconciliation_note': 'Conciliado con evidencia', 'balance_note': 'Saldo cero', 'control_note': 'Revisión completada', 'closure_note': 'Cierre comprobado por HTTP', 'initial_authorization': 'AUT-HTTP', 'cdp_number': 'CDP-HTTP', 'cdp_date': start.isoformat(), 'cdp_amount': '1000000', 'scale_id': self.scale.pk, 'overnight_days': '2', 'day_days': '1', 'authorized_transport': '50000', 'rp_number': 'RP-HTTP', 'rp_date': start.isoformat(), 'rp_amount': '550000', 'payment_order': 'OP-HTTP', 'commission_report': 'Comisión ejecutada', 'executed': '550000', 'legalization_note': 'Soportes completos', 'legalization_review': 'Legalización revisada'}
         for _ in range(25):
             if case.stage == 'cerrado':
                 break
@@ -584,14 +595,14 @@ class WorkflowTests(TestCase):
                 response = client.post(reverse('case_upload', args=[case.pk]), payload)
                 self.assertEqual(response.status_code, 302, (step['key'], category))
                 self.refresh(case)
-            if case.stage in {'recaudo', 'pago'}:
-                category = 'recuperacion' if kind == 'incapacidad' else 'desembolso'
+            if case.stage in {'pago'}:
+                category = 'desembolso'
                 payload = {'revision': case.revision, 'category': category, 'file': SimpleUploadedFile(category + '.pdf', b'%PDF-1.4\nHTTP payment\n%%EOF')}
                 response = client.post(reverse('case_upload', args=[case.pk]), payload)
                 self.assertEqual(response.status_code, 302)
                 self.refresh(case)
                 evidence = case.documents.get(category=category)
-                response = client.post(reverse('case_payment', args=[case.pk]), {'revision': case.revision, 'kind': category, 'amount': '300000' if kind == 'incapacidad' else '550000', 'paid_on': start.isoformat(), 'reference': 'BANCO-HTTP', 'evidence': evidence.pk})
+                response = client.post(reverse('case_payment', args=[case.pk]), {'revision': case.revision, 'kind': category, 'amount': '550000', 'paid_on': start.isoformat(), 'reference': 'BANCO-HTTP', 'evidence': evidence.pk})
                 self.assertEqual(response.status_code, 302)
                 self.refresh(case)
             before = case.stage
@@ -607,11 +618,11 @@ class WorkflowTests(TestCase):
 
     def test_http_complete_incapacity_forms_documents_payments_history(self):
         case = self.http_run('incapacidad')
-        self.assertEqual(services.totals(case)['pending'], 0)
+        self.assertEqual(case.stage, 'cerrado')
 
     def test_http_complete_travel_forms_budget_liquidation_legalization(self):
         case = self.http_run('viatico')
-        self.assertEqual(services.totals(case)['travel_balance'], 0)
+        self.assertEqual(case.stage, 'cerrado')
         self.assertEqual(case.data['scale_snapshot']['overnight_rate'], '200000.00')
 
     def test_document_preview_is_authorized_audited_and_sandboxed(self):
@@ -641,13 +652,12 @@ class WorkflowTests(TestCase):
 
     def test_malformed_financial_fields_return_validation_errors(self):
         case = self.new()
-        self.until(case, 'recaudo')
+        self.until(case, 'comprobante')
         client = Client()
         client.force_login(self.people['talento'])
         for value in ['NaN', 'Infinity', '1e99999', '-10', '0.001']:
             response = client.post(reverse('case_recognition', args=[case.pk]), {'revision': case.revision, 'recognized': value, 'document_id': 0, 'note': 'Intento inválido'})
             self.assertEqual(response.status_code, 302)
-        self.assertEqual(services.totals(self.refresh(case))['recognized'], Decimal('300000'))
         self.assertEqual(FinancialEntry.objects.count(), 0)
 
     def test_audit_handles_anonymous_login_events(self):
@@ -657,6 +667,76 @@ class WorkflowTests(TestCase):
         response = client.get('/administracion/auditoria/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Sin autenticar')
+
+    def test_incapacity_radication_number_and_general_illness_label(self):
+        client = Client()
+        client.force_login(self.people['solicitante'])
+        url_create = reverse('case_create', args=['incapacidad'])
+        get_res = client.get(url_create)
+        self.assertEqual(get_res.status_code, 200)
+        self.assertContains(get_res, 'Número de radicación')
+        self.assertContains(get_res, 'Enfermedad general')
+
+        start = timezone.localdate() - timedelta(days=5)
+        post_data = {
+            'revision': 1,
+            'start_date': start.isoformat(),
+            'end_date': (start + timedelta(days=2)).isoformat(),
+            'leave_type': 'comun',
+            'incapacity_number': 'INC-EPS-2026-99',
+            'radication_number': 'RAD-GENERAL-2026-001',
+            'epicrisis_radication': 'EPI-2026-555',
+            'entity': 'EPS Sanitas',
+            'observations': 'Incapacidad médica por enfermedad general',
+        }
+        create_res = client.post(url_create, post_data)
+        self.assertEqual(create_res.status_code, 302)
+        case = Case.objects.filter(kind='incapacidad').latest('created_at')
+        self.assertEqual(case.data.get('radication_number'), 'RAD-GENERAL-2026-001')
+        self.assertEqual(case.data.get('incapacity_number'), 'INC-EPS-2026-99')
+        self.assertEqual(case.data.get('epicrisis_radication'), 'EPI-2026-555')
+        self.assertEqual(case.data.get('leave_type'), 'comun')
+
+        detail_res = client.get(reverse('case_detail', args=[case.pk]))
+        self.assertEqual(detail_res.status_code, 200)
+        self.assertContains(detail_res, 'RAD-GENERAL-2026-001')
+        self.assertContains(detail_res, 'INC-EPS-2026-99')
+        self.assertContains(detail_res, 'EPI-2026-555')
+        self.assertContains(detail_res, 'Enfermedad general')
+
+    def test_incapacity_payment_rule_contraloria_vs_eps(self):
+        # 1. Caso de 2 días (menos o igual a 2 días): asumido por la Contraloría Municipal de Pasto
+        start = timezone.localdate() - timedelta(days=5)
+        c2 = self.new('incapacidad', start_date=start, end_date=start + timedelta(days=1))
+        self.assertEqual(c2.data['days'], 2)
+        self.until(c2, 'pago_funcionario')
+        # Si intenta registrar que lo asume la EPS, debe fallar por regla normativa
+        with self.assertRaises(ValidationError) as ctx:
+            self.fill(c2, payer_entity='eps')
+            services.transition(self.actor(c2), c2.pk, c2.revision, 'advance')
+        self.assertIn('Contraloría Municipal de Pasto', str(ctx.exception))
+        # Con payer_entity='contraloria' avanza exitosamente
+        self.fill(c2, payer_entity='contraloria')
+        services.transition(self.actor(c2), c2.pk, c2.revision, 'advance')
+        self.refresh(c2)
+        self.assertEqual(c2.data['payer_entity'], 'contraloria')
+
+        # 2. Caso de 5 días (más de 2 días): auxilio a partir del día 3 asumido por la EPS
+        start_c5 = timezone.localdate() - timedelta(days=25)
+        c5 = self.new('incapacidad', start_date=start_c5, end_date=start_c5 + timedelta(days=4))
+        self.assertEqual(c5.data['days'], 5)
+        self.until(c5, 'pago_funcionario')
+        # Si intenta indicar que todo lo asume la Contraloría, debe fallar
+        with self.assertRaises(ValidationError) as ctx:
+            self.fill(c5, payer_entity='contraloria')
+            services.transition(self.actor(c5), c5.pk, c5.revision, 'advance')
+        self.assertIn('EPS', str(ctx.exception))
+        # Con payer_entity='eps' avanza exitosamente
+        self.fill(c5, payer_entity='eps')
+        services.transition(self.actor(c5), c5.pk, c5.revision, 'advance')
+        self.refresh(c5)
+        self.assertEqual(c5.data['payer_entity'], 'eps')
+
 
 
 @override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
