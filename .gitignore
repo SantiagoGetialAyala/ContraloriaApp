@@ -5,3 +5,4 @@ __pycache__/
 var/
 .coverage
 staticfiles/
+var-demo/
