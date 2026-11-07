@@ -7,9 +7,10 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from django.utils.text import get_valid_filename
-from .models import Case, CompensatoryLedgerEntry, Document, Event, FinancialEntry, PolicyVersion, TravelScale
+from .models import Case, CompensatoryLedgerEntry, Dependencia, Document, Event, FinancialEntry, PolicyVersion, TravelScale, VacationLedgerEntry, VacationPeriod
 from .forms import BASE_FIELDS
 from .workflows import FIELDS, DOCS, WORKFLOWS, workflow, current_step, editable_step, actor_for, actor_for_transition, transition_rule, role_names
+from . import vacations
 
 ZERO = Decimal('0.00')
 TERMINAL = {'cerrado', 'rechazado'}
@@ -78,6 +79,9 @@ def set_deadline(case):
 
 def validate_dates(case, strict=False):
     data = case.data
+    if case.kind == 'vacaciones':
+        vacations.plan_case(case, strict)
+        return
     if case.kind == 'compensatorio':
         work_date = data.get('work_date')
         start, end = data.get('work_start'), data.get('work_end')
@@ -142,9 +146,11 @@ def create_case(user, kind, cleaned):
         raise ValidationError('Módulo desconocido.')
     if not hasattr(user, 'profile'):
         raise ValidationError('El usuario no tiene dependencia configurada.')
+    if kind == 'vacaciones':
+        vacations.check_eligible(user)
     policy = PolicyVersion.objects.filter(kind=kind).first()
     if not policy:
-        source = 'Propuesta técnica pendiente de procedimiento oficial de compensatorios.' if kind == 'compensatorio' else 'Propuesta basada en el prompt; resoluciones no aportadas.'
+        source = {'compensatorio': 'Propuesta técnica pendiente de procedimiento oficial de compensatorios.', 'vacaciones': 'Propuesta basada en el formato de programación anual de vacaciones; procedimiento oficial no aportado.'}.get(kind, 'Propuesta basada en el prompt; resoluciones no aportadas.')
         policy = PolicyVersion.objects.create(kind=kind, version=1, config={}, confirmed=False, source=source)
     case = Case(kind=kind, owner=user, department=user.profile.department, policy=policy)
     case.data = serialize({k: v for k, v in cleaned.items() if k in BASE_FIELDS[kind]})
@@ -248,6 +254,16 @@ def validate_step(case, step):
                 raise ValidationError('Para incapacidades de hasta 2 días (enfermedad general), el pago debe ser asumido al 100% por la Contraloría Municipal de Pasto y no por la EPS (Resolución 067/2025 y Art. 2.2.3.4.3 DUR 780/2016).')
             if days > 2 and payer == 'contraloria':
                 raise ValidationError('Para incapacidades superiores a 2 días, a partir del tercer día el auxilio económico corresponde a la EPS (Resolución 067/2025 y Art. 2.2.3.4.3 DUR 780/2016).')
+    elif case.kind == 'vacaciones':
+        if key == 'autorizacion' and date.fromisoformat(data['resolution_date']) > date.fromisoformat(data['start_date']):
+            raise ValidationError('La resolución de vacaciones debe ser anterior o igual al inicio del disfrute.')
+        if key == 'disfrute':
+            expected = date.fromisoformat(data['return_date'])
+            actual = date.fromisoformat(data['actual_return_date'])
+            if actual < expected:
+                raise ValidationError('El reintegro es anterior a la fecha prevista. Registre primero la suspensión de las vacaciones.')
+            if actual > timezone.localdate():
+                raise ValidationError('No se puede registrar un reintegro futuro.')
     elif case.kind == 'viatico':
         if key == 'pago' and money['paid'] != money['authorized']:
             raise ValidationError('El desembolso registrado debe completar el total autorizado.')
@@ -339,6 +355,9 @@ def transition(user, case_id, revision, action, note=''):
                 actor=user,
             )
             audit(case, user, 'Compensatorio autorizado y descontado', before=before, after=case.stage, ledger_entry=entry.pk, minutes=entry.minutes, rule_reference=entry.rule_reference)
+        if case.kind == 'vacaciones' and step['key'] == 'autorizacion':
+            entry = grant_vacation(user, case)
+            audit(case, user, 'Vacaciones concedidas y descontadas', before=before, after=case.stage, ledger_entry=entry.pk, days=entry.days, period=entry.period.label)
         action_label = 'Etapa completada'
     elif action == 'return':
         if case.stage == 'correccion' or index == 0 or 'owner' in step['roles']:
@@ -349,6 +368,8 @@ def transition(user, case_id, revision, action, note=''):
         if case.financial_entries.exists() or (case.kind == 'incapacidad' and (case.data.get('employee_payment_ref') or index > next(i for i, x in enumerate(steps) if x['key'] == 'pago_funcionario'))):
             if step['key'] != 'revision_legalizacion':
                 raise ValidationError('Hay actuaciones financieras previas. Registre una observación y complete la etapa; los pagos no pueden deshacerse por devolución.')
+        if case.kind == 'vacaciones' and case.vacation_entries.exists():
+            raise ValidationError('Las vacaciones ya fueron concedidas. Use la suspensión o el aplazamiento en lugar de una devolución.')
         case.return_to = case.stage
         case.stage = 'correccion'
         case.correction_fields = note
@@ -385,6 +406,8 @@ def upload_categories(user, case):
             categories += ['comprobante', 'transcripcion', 'solicitud_recobro', 'reconocimiento']
         if step['key'] == 'comision':
             categories += ['informe_comision', 'comprobante_informe', 'gastos']
+        if case.kind == 'vacaciones' and step['key'] == 'disfrute':
+            categories += ['novedad_vacaciones']
     if treasury_allowed(user, case):
         categories += ['pago_funcionario', 'recuperacion'] if case.kind == 'incapacidad' else ['desembolso', 'reintegro']
     return sorted(set(categories))
@@ -481,3 +504,104 @@ def additional_recognition(user, case_id, revision, recognized, note, document_i
     bump(case)
     audit(case, user, 'Reconocimiento actualizado', before=before, after=case.stage, note=note, recognized=str(value), document_id=document.pk)
     return case
+
+
+# --- Vacaciones -----------------------------------------------------------------------------------
+
+def grant_vacation(user, case):
+    """Descuenta los días concedidos del periodo asignado. Se ejecuta dentro de la transición."""
+    period = VacationPeriod.objects.get(pk=case.data['period_id'], employee=case.owner)
+    days = int(case.data['business_days'])
+    if vacations.period_balance(period) < days:
+        raise ValidationError(f'El {period.label} ya no tiene saldo suficiente para conceder {days} días hábiles.')
+    return VacationLedgerEntry.objects.create(period=period, case=case, kind='disfrute', days=days, effective_on=date.fromisoformat(case.data['start_date']), note=case.data.get('resolution_number', ''), actor=user)
+
+
+def can_interrupt_vacation(user, case):
+    return case.kind == 'vacaciones' and case.stage == 'disfrute' and 'talento' in role_names(user) and not case.vacation_entries.filter(kind='devolucion').exists()
+
+
+@transaction.atomic
+def interrupt_vacation(user, case_id, revision, kind, on_date, reason, document_id):
+    """Suspensión (durante el disfrute) o aplazamiento (antes de iniciar). Devuelve los días no disfrutados."""
+    case = Case.objects.select_for_update().select_related('policy', 'owner').get(pk=case_id)
+    check_revision(case, revision)
+    if not can_interrupt_vacation(user, case):
+        raise PermissionDenied('Solo Talento Humano registra novedades de vacaciones concedidas, una vez por expediente.')
+    if not reason.strip():
+        raise ValidationError('Indique el motivo de la novedad y el acto que la soporta.')
+    data = case.data
+    start, end = date.fromisoformat(data['start_date']), date.fromisoformat(data['end_date'])
+    granted = int(data['business_days'])
+    if kind == 'aplazamiento':
+        if on_date != start:
+            raise ValidationError('El aplazamiento aplica desde la fecha de inicio prevista.')
+        if timezone.localdate() >= start:
+            raise ValidationError('Las vacaciones ya iniciaron; registre una suspensión.')
+        enjoyed = 0
+    elif kind == 'suspension':
+        if not start < on_date <= end:
+            raise ValidationError('La suspensión debe ocurrir después del primer día y antes del último día de disfrute.')
+        if on_date > timezone.localdate():
+            raise ValidationError('No se puede registrar una suspensión futura.')
+        enjoyed = vacations.count_business_days(start, on_date - timedelta(days=1))
+    else:
+        raise ValidationError('Novedad desconocida.')
+    returned = granted - enjoyed
+    if returned <= 0:
+        raise ValidationError('No quedan días por devolver.')
+    entry = case.vacation_entries.filter(kind='disfrute').select_related('period').first()
+    document = case.documents.filter(pk=document_id, category='novedad_vacaciones', created_at__gte=entry.created_at).first()
+    if not document:
+        raise ValidationError('Adjunte el soporte de la novedad después de la concesión.')
+    refund = VacationLedgerEntry.objects.create(period=entry.period, case=case, kind='devolucion', days=returned, effective_on=on_date, note=reason, actor=user)
+    data.update({'interruption_kind': kind, 'interruption_date': on_date.isoformat(), 'interruption_reason': reason, 'enjoyed_days': enjoyed, 'returned_days': returned, 'return_date': on_date.isoformat()})
+    if enjoyed:
+        data['end_date'] = (on_date - timedelta(days=1)).isoformat()
+    before = case.stage
+    bump(case)
+    audit(case, user, 'Vacaciones suspendidas' if kind == 'suspension' else 'Vacaciones aplazadas', before=before, after=case.stage, note=reason, ledger_entry=refund.pk, enjoyed=enjoyed, returned=returned, document_id=document.pk)
+    return case
+
+
+@transaction.atomic
+def register_initial_vacation_days(user, employee, period_number, days, note):
+    """Carga inicial: días ya disfrutados de un periodo antes de usar el sistema."""
+    if 'talento' not in role_names(user):
+        raise PermissionDenied('Solo Talento Humano registra saldos iniciales.')
+    if not note.strip():
+        raise ValidationError('Indique la fuente del saldo inicial (resolución, nómina u hoja de vida).')
+    periods = {p.number: p for p in vacations.sync_periods(employee)}
+    period = periods.get(period_number)
+    if not period:
+        raise ValidationError('El periodo indicado aún no está causado.')
+    if not 0 < days <= vacations.period_balance(period):
+        raise ValidationError('Los días deben ser positivos y no superar el saldo del periodo.')
+    entry = VacationLedgerEntry.objects.create(period=period, kind='carga_inicial', days=days, effective_on=period.service_to, note=note, actor=user)
+    audit(None, user, 'Saldo inicial de vacaciones registrado', employee=employee.pk, period=period.number, days=days, ledger_entry=entry.pk)
+    return entry
+
+
+def apply_profile(profile, data):
+    """Actualiza los datos laborales del perfil y su dependencia (se crea si no existe)."""
+    name = (data.get('department') or '').strip()
+    if not name:
+        raise ValidationError('Indique la dependencia del funcionario.')
+    dependencia = Dependencia.objects.filter(name__iexact=name).first() or Dependencia.objects.create(name=name)
+    profile.department = dependencia.name
+    profile.dependencia = dependencia
+    for key in ['employment', 'cargo', 'codigo', 'grado']:
+        if key in data:
+            setattr(profile, key, data[key] or '')
+    if 'hire_date' in data:
+        profile.hire_date = data['hire_date']
+    if 'cedula' in data:
+        profile.cedula = data['cedula'] or None
+    profile.save()
+    if data.get('is_jefe'):
+        dependencia.jefe = profile.user
+        dependencia.save(update_fields=['jefe'])
+    elif 'is_jefe' in data and dependencia.jefe_id == profile.user_id:
+        dependencia.jefe = None
+        dependencia.save(update_fields=['jefe'])
+    return profile

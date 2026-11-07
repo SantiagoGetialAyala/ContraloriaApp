@@ -80,6 +80,16 @@ FIELDS = {
     'balance_review_note': ('Verificación de saldo y condiciones', 'textarea'),
     'compensatory_authorization_note': ('Decisión de autorización', 'textarea'),
     'schedule_note': ('Registro de programación y novedades', 'textarea'),
+    'business_days': ('Días hábiles a disfrutar', 'int'),
+    'return_date': ('Fecha prevista de reintegro', 'date'),
+    'period_label': ('Periodo de causación asignado', 'text'),
+    'jefe_note': ('Visto bueno del jefe inmediato', 'textarea'),
+    'actual_return_date': ('Fecha efectiva de reintegro', 'pastdate'),
+    'interruption_kind': ('Novedad registrada', 'choice', [('suspension', 'Suspensión'), ('aplazamiento', 'Aplazamiento')]),
+    'interruption_date': ('Fecha de la novedad', 'date'),
+    'interruption_reason': ('Motivo de la novedad', 'textarea'),
+    'enjoyed_days': ('Días hábiles disfrutados', 'int'),
+    'returned_days': ('Días hábiles devueltos al periodo', 'int'),
 }
 DOCS = {
     'certificado': 'Certificado médico / Incapacidad', 'epicrisis': 'Epicrisis o historia clínica', 'soporte_solicitud': 'Soportes de la solicitud',
@@ -99,7 +109,10 @@ DOCS = {
     'soporte_tiempo': 'Soporte del tiempo trabajado', 'revision_soporte_tiempo': 'Revisión de soportes del tiempo trabajado',
     'autorizacion_reconocimiento': 'Autorización del reconocimiento de tiempo', 'solicitud_compensatorio': 'Solicitud de compensatorio',
     'revision_saldo': 'Verificación de saldo y condiciones', 'autorizacion_compensatorio': 'Autorización del compensatorio',
+    'novedad_vacaciones': 'Soporte de suspensión o aplazamiento de vacaciones',
 }
+# Roles relacionales: dependen del expediente, no de un grupo del usuario.
+RELATIONAL_ROLES = {'owner': 'Solicitante', 'jefe': 'Jefe inmediato'}
 
 def s(key, label, roles, fields=(), docs=()):
     return {'key': key, 'label': label, 'roles': list(roles), 'fields': list(fields), 'docs': list(docs)}
@@ -134,7 +147,14 @@ COMP = [
     s('programacion', 'Programación y calendario', ['talento'], ['schedule_note']),
     s('cierre', 'Cierre y archivo del expediente', ['talento'], ['closure_note'], ['cierre']),
 ]
-WORKFLOWS = {'incapacidad': INC, 'viatico': VIA, 'compensatorio': COMP}
+VAC = [
+    s('borrador', 'Solicitud de vacaciones', ['owner'], ['start_date', 'business_days']),
+    s('visto_bueno', 'Visto bueno del jefe inmediato', ['jefe'], ['jefe_note']),
+    s('revision', 'Verificación de saldo y cruces', ['talento'], ['review_note']),
+    s('autorizacion', 'Resolución de vacaciones', ['autoridad'], ['resolution_number', 'resolution_date'], ['acto_firmado']),
+    s('disfrute', 'Disfrute y reintegro', ['talento'], ['actual_return_date']),
+]
+WORKFLOWS = {'incapacidad': INC, 'viatico': VIA, 'compensatorio': COMP, 'vacaciones': VAC}
 
 
 def workflow(case):
@@ -167,12 +187,22 @@ def role_names(user):
     return set(user.groups.values_list('name', flat=True)) if user.is_authenticated else set()
 
 
+def has_stage_role(user, case, roles):
+    roles = set(roles)
+    if 'owner' in roles and user.pk == case.owner_id:
+        return True
+    if 'jefe' in roles:
+        from .vacations import is_superior
+        if is_superior(user, case.owner):
+            return True
+    return bool(role_names(user) & (roles - set(RELATIONAL_ROLES)))
+
+
 def actor_for(user, case, step=None):
     step = step or editable_step(case)
     if not step:
         return False
-    roles = set(step['roles'])
-    return ('owner' in roles and user.pk == case.owner_id) or bool(role_names(user) & (roles - {'owner'}))
+    return has_stage_role(user, case, step['roles'])
 
 
 def transition_rule(case, action='advance'):
@@ -198,8 +228,7 @@ def actor_for_transition(user, case, action='advance'):
     rule = transition_rule(case, action)
     if not rule:
         return False
-    roles = set(rule['roles'])
-    return ('owner' in roles and user.pk == case.owner_id) or bool(role_names(user) & (roles - {'owner'}))
+    return has_stage_role(user, case, rule['roles'])
 
 
 def stage_label(case):
@@ -211,6 +240,16 @@ def stage_label(case):
         return 'Corrección · ' + correction_step(case)['label']
     step = current_step(case)
     return step['label'] if step else case.stage
+
+
+def valid_stage_roles(value, default, valid_roles):
+    relational = [r for r in default if r in RELATIONAL_ROLES]
+    if not isinstance(value, list) or not value:
+        return False
+    if relational:
+        # Una etapa del solicitante o del jefe no puede reasignarse a otro rol.
+        return value == relational
+    return all(r in valid_roles for r in value)
 
 
 def validate_config(kind, config):
@@ -227,9 +266,8 @@ def validate_config(kind, config):
             if stage not in stages:
                 raise ValidationError(f'Etapa desconocida: {stage}')
             if key == 'roles':
-                expected_owner = 'owner' in stages[stage]['roles']
-                if not isinstance(value, list) or not value or any(r not in valid_roles | {'owner'} for r in value) or (expected_owner and value != ['owner']) or (not expected_owner and 'owner' in value):
-                    raise ValidationError('Los roles deben ser institucionales; las etapas del solicitante deben conservar owner.')
+                if not valid_stage_roles(value, stages[stage]['roles'], valid_roles):
+                    raise ValidationError('Los roles deben ser institucionales; las etapas del solicitante o del jefe inmediato deben conservar owner o jefe.')
             elif key == 'deadlines' and (type(value) is not int or not 1 <= value <= 3650):
                 raise ValidationError('Los plazos deben ser días calendario entre 1 y 3650.')
             elif key == 'additional_documents' and (not isinstance(value, list) or any(d not in DOCS for d in value)):
@@ -258,8 +296,7 @@ def validate_config(kind, config):
         if item['to'] not in safe_targets:
             raise ValidationError('La transición omite controles obligatorios o apunta a un estado no permitido.')
         expected_roles = config.get('roles', {}).get(item['from'], stages[item['from']]['roles'])
-        expected_owner = 'owner' in expected_roles
-        if not isinstance(item['roles'], list) or not item['roles'] or any(r not in valid_roles | {'owner'} for r in item['roles']) or (expected_owner and item['roles'] != ['owner']) or (not expected_owner and 'owner' in item['roles']):
+        if not valid_stage_roles(item['roles'], expected_roles, valid_roles):
             raise ValidationError('Los roles de transición no son válidos para esa etapa.')
         if item['roles'] != expected_roles:
             raise ValidationError('Los roles de la transición deben coincidir con los responsables configurados para la etapa.')

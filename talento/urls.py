@@ -16,6 +16,7 @@ urlpatterns = [
     path('expedientes/<uuid:case_id>/documentos/', views.case_upload, name='case_upload'),
     path('expedientes/<uuid:case_id>/movimientos/', views.case_payment, name='case_payment'),
     path('expedientes/<uuid:case_id>/reconocimiento/', views.case_recognition, name='case_recognition'),
+    path('expedientes/<uuid:case_id>/novedad-vacaciones/', views.case_vacation_interruption, name='case_vacation_interruption'),
     path('documentos/<int:document_id>/ver/', views.document_download, {'preview': True}, name='document_preview'),
     path('documentos/<int:document_id>/descargar/', views.document_download, name='document_download'),
     path('administracion/usuarios/', views.users, name='users'),

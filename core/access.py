@@ -14,6 +14,8 @@ def visible_cases(user):
         query |= ~Q(stage='borrador')
     elif 'presupuesto' in roles:
         query |= Q(kind='viatico') & ~Q(stage='borrador')
+    # El jefe inmediato solo ve las vacaciones enviadas de su equipo, no sus incapacidades ni viáticos.
+    query |= Q(kind='vacaciones', owner__profile__dependencia__jefe=user) & ~Q(stage='borrador')
     return Case.objects.filter(query).select_related('owner', 'policy')
 
 
@@ -31,6 +33,10 @@ def can_document(user, document):
         return 'talento' in roles
     if roles & {'talento', 'juridica', 'secretaria', 'autoridad', 'control'}:
         return True
+    if case.kind == 'vacaciones':
+        from .vacations import is_superior
+        if is_superior(user, case.owner):
+            return True
     return bool(roles & {'tesoreria', 'contabilidad', 'presupuesto'}) and document.category in FINANCE
 
 
