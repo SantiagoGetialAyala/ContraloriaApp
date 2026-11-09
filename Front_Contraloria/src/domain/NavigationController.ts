@@ -8,6 +8,7 @@ export type RouteMatch =
   | { name: 'case_list'; kind: CaseKind }
   | { name: 'case_create'; kind: CaseKind }
   | { name: 'case_detail'; caseId: string }
+  | { name: 'vacation_calendar' }
   | { name: 'compensatory_calendar' }
   | { name: 'procedure' }
   | { name: 'configuration' }
@@ -83,6 +84,7 @@ export class NavigationController {
     if (clean === '/ingresar') return { name: 'login' };
     if (clean === '/configurar') return { name: 'setup' };
     if (clean === '/cuenta/clave') return { name: 'password_change' };
+    if (clean === '/vacaciones/calendario') return { name: 'vacation_calendar' };
     if (clean === '/compensatorios/calendario') return { name: 'compensatory_calendar' };
     if (clean === '/procedimientos') return { name: 'procedure' };
     if (clean === '/parametros') return { name: 'configuration' };

@@ -7,6 +7,7 @@ import type {
   DashboardDTO,
   FieldSchemaDTO,
   ProceduresDTO,
+  VacationDashboardDTO,
 } from '../domain/types';
 import { BaseApiService } from './BaseApiService';
 
@@ -189,6 +190,45 @@ export class ExpedienteService extends BaseApiService {
       expediente: ExpedienteFactory.crear(res.data),
       mensaje: res.message || 'Novedad registrada.',
     };
+  }
+
+  public async obtenerDashboardVacaciones(year?: number): Promise<VacationDashboardDTO> {
+    return this.http.get<VacationDashboardDTO>(
+      '/api/vacaciones/dashboard/',
+      year ? { year: String(year) } : {},
+    );
+  }
+
+  public async registrarSaldoInicialVacaciones(payload: {
+    employee_id: number;
+    period_number: number;
+    days: number;
+    note: string;
+  }): Promise<string> {
+    const res = await this.http.post<undefined>('/api/vacaciones/dashboard/', {
+      ...payload,
+      action: 'initial_balance',
+    });
+    return res.message || 'Saldo inicial registrado.';
+  }
+
+  public async guardarFestivoVacaciones(payload: {
+    date: string;
+    name: string;
+  }): Promise<string> {
+    const res = await this.http.post<undefined>('/api/vacaciones/dashboard/', {
+      ...payload,
+      action: 'save_holiday',
+    });
+    return res.message || 'Festivo guardado.';
+  }
+
+  public async precargarFestivosAnuales(year: number): Promise<string> {
+    const res = await this.http.post<undefined>('/api/vacaciones/dashboard/', {
+      year,
+      action: 'load_year_holidays',
+    });
+    return res.message || 'Festivos precargados.';
   }
 
   public async obtenerCalendarioCompensatorios(): Promise<CalendarDTO> {

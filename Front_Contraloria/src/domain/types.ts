@@ -24,6 +24,11 @@ export interface CaseOwnerDTO {
   username: string;
   full_name: string;
   employment: string;
+  cedula?: string;
+  cargo?: string;
+  codigo?: string;
+  grado?: string;
+  hire_date?: string;
 }
 
 export interface CaseTotalsDTO {
@@ -355,6 +360,65 @@ export interface UsersDirectoryDTO {
   }>;
   available_roles: Array<[string, string]>;
   employments: Array<[string, string]>;
+}
+
+export interface VacationScheduleItemDTO {
+  id: string;
+  case_id: string | null;
+  reference: string;
+  employee_id: number;
+  name: string;
+  role: string;
+  dept: string;
+  start: string;
+  end: string;
+  return_date: string;
+  business_days: number;
+  calendar_days: number;
+  stage: string;
+  stage_label: string;
+  status: 'concedida' | 'en_tramite' | 'suspendida' | 'sin_programar';
+  period_label: string;
+  balance_days: number;
+}
+
+export interface VacationEmployeeInfoDTO {
+  id: number;
+  username: string;
+  name: string;
+  role: string;
+  dept: string;
+  employment: string;
+  hire_date: string;
+  total_balance: number;
+  periods: Array<{
+    number: number;
+    label: string;
+    service_from: string;
+    service_to: string;
+    balance: number;
+    reserved: number;
+    prescribes_on: string;
+    prescribed: boolean;
+  }>;
+  problem: string | null;
+}
+
+export interface VacationDashboardDTO {
+  today: string;
+  year: number;
+  can_manage_all: boolean;
+  is_talento: boolean;
+  dependencias: string[];
+  holidays: Array<{ date: string; name: string }>;
+  schedule: VacationScheduleItemDTO[];
+  employees: VacationEmployeeInfoDTO[];
+  stats: {
+    total_cases: number;
+    granted_count: number;
+    in_progress_count: number;
+    own_balance: number;
+  };
 }
 
 export interface AuditLogDTO {

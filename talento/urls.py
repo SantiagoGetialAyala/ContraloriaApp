@@ -39,6 +39,7 @@ urlpatterns = [
     path('api/cases/detail/<uuid:case_id>/payment/', api.CasePaymentApiView.as_view(), name='api_case_payment'),
     path('api/cases/detail/<uuid:case_id>/recognition/', api.CaseRecognitionApiView.as_view(), name='api_case_recognition'),
     path('api/cases/detail/<uuid:case_id>/vacation-interruption/', api.CaseVacationInterruptionApiView.as_view(), name='api_case_vacation_interruption'),
+    path('api/vacaciones/dashboard/', api.VacationDashboardApiView.as_view(), name='api_vacation_dashboard'),
     path('api/compensatorios/calendar/', api.CompensatoryCalendarApiView.as_view(), name='api_compensatory_calendar'),
     path('api/procedures/', api.ProcedureApiView.as_view(), name='api_procedures'),
     path('api/configuration/', api.ConfigurationApiView.as_view(), name='api_configuration'),

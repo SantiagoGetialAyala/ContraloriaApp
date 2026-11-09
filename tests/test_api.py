@@ -121,3 +121,63 @@ class ApiOOPWorkflowTests(TestCase):
         audit_res = self.client.get(reverse('api_audit'))
         self.assertEqual(audit_res.status_code, 200)
         self.assertTrue(audit_res.json()['ok'])
+
+    def test_api_vacaciones_module_and_user_employment_fields(self):
+        from core import vacations
+
+        vacations.load_holidays(2026)
+        self.client.force_login(self.people['administrador'])
+        solicitante = self.people['solicitante']
+        access_res = self.client.post(
+            reverse('api_user_access', args=[solicitante.pk]),
+            data=json.dumps({
+                'roles': ['solicitante'],
+                'active': True,
+                'department': 'Dirección administrativa',
+                'employment': 'funcionario',
+                'cedula': '1085000111',
+                'cargo': 'Profesional Universitario',
+                'codigo': '219',
+                'grado': '02',
+                'hire_date': '2024-01-15',
+                'is_jefe': False,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(access_res.status_code, 200)
+
+        self.client.force_login(solicitante)
+        create_res = self.client.post(
+            reverse('api_case_module', args=['vacaciones']),
+            data=json.dumps({
+                'start_date': '2026-06-01',
+                'business_days': 5,
+                'observations': 'Solicitud de vacaciones desde API POO',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(create_res.status_code, 201)
+        case_data = create_res.json()['data']['case']
+        self.assertEqual(case_data['kind'], 'vacaciones')
+        self.assertIsNotNone(case_data['vacation'])
+        self.assertGreaterEqual(len(case_data['vacation']['periods']), 1)
+
+        dash_res = self.client.get(reverse('api_vacation_dashboard'), {'year': '2026'})
+        self.assertEqual(dash_res.status_code, 200)
+        dash_payload = dash_res.json()['data']
+        self.assertEqual(dash_payload['year'], 2026)
+        self.assertGreaterEqual(len(dash_payload['schedule']), 1)
+        self.assertGreaterEqual(len(dash_payload['holidays']), 18)
+
+        self.client.force_login(self.people['talento'])
+        hol_res = self.client.post(
+            reverse('api_vacation_dashboard'),
+            data=json.dumps({
+                'action': 'save_holiday',
+                'date': '2026-06-24',
+                'name': 'Día institucional de prueba',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(hol_res.status_code, 200)
+        self.assertTrue(hol_res.json()['ok'])

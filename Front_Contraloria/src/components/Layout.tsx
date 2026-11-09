@@ -80,25 +80,19 @@ export function Layout({
             <span aria-hidden="true">↗</span> Viáticos y viajes <span className="nav-arrow">›</span>
           </AppLink>
           <AppLink
-            to="/modulos/compensatorio"
-            onClick={closeSidebar}
-            className={`nav-item ${isModuleActive('compensatorio') ? 'active' : ''}`}
-          >
-            <span aria-hidden="true">◷</span> Compensatorios <span className="nav-arrow">›</span>
-          </AppLink>
-          <AppLink
             to="/modulos/vacaciones"
             onClick={closeSidebar}
-            className={`nav-item ${isModuleActive('vacaciones') ? 'active' : ''}`}
+            className={`nav-item ${isModuleActive('vacaciones') || route.name === 'vacation_calendar' ? 'active' : ''}`}
           >
-            <span aria-hidden="true">☀</span> Vacaciones <span className="nav-arrow">›</span>
+            <span aria-hidden="true">☀</span> Gestión de vacaciones{' '}
+            <span className="nav-arrow">›</span>
           </AppLink>
           <AppLink
-            to="/compensatorios/calendario"
+            to="/vacaciones/calendario"
             onClick={closeSidebar}
-            className={`nav-item ${route.name === 'compensatory_calendar' ? 'active' : ''}`}
+            className={`nav-item ${route.name === 'vacation_calendar' ? 'active' : ''}`}
           >
-            <span aria-hidden="true">▦</span> Calendario
+            <span aria-hidden="true">▦</span> Plan anual y calendario
           </AppLink>
           <AppLink
             to="/procedimientos"

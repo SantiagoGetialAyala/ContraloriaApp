@@ -6,7 +6,6 @@ import type { UsuarioSesion } from './domain/Usuario';
 import type { CaseKind } from './domain/types';
 import { AuditPage } from './pages/AuditPage';
 import { AuthPage } from './pages/AuthPage';
-import { CalendarPage } from './pages/CalendarPage';
 import { CaseCreatePage } from './pages/CaseCreatePage';
 import { CaseDetailPage } from './pages/CaseDetailPage';
 import { CaseListPage } from './pages/CaseListPage';
@@ -15,6 +14,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { PasswordPage } from './pages/PasswordPage';
 import { ProcedurePage } from './pages/ProcedurePage';
 import { UsersPage } from './pages/UsersPage';
+import { VacationDashboardPage } from './pages/VacationDashboardPage';
 import { appServices } from './services/ServiceContainer';
 
 export function App() {
@@ -141,6 +141,9 @@ export function App() {
       case 'dashboard':
         return <DashboardPage usuario={usuario} onNotify={notify} />;
       case 'case_list':
+        if (route.kind === 'vacaciones') {
+          return <VacationDashboardPage key="vac-dash" initialTab="calendar" onNotify={notify} />;
+        }
         return <CaseListPage key={route.kind} kind={route.kind} onNotify={notify} />;
       case 'case_create':
         return <CaseCreatePage key={route.kind} kind={route.kind} onNotify={notify} />;
@@ -153,8 +156,9 @@ export function App() {
             onNotify={notify}
           />
         );
+      case 'vacation_calendar':
       case 'compensatory_calendar':
-        return <CalendarPage onNotify={notify} />;
+        return <VacationDashboardPage key="vac-cal" initialTab="calendar" onNotify={notify} />;
       case 'procedure':
         return <ProcedurePage onNotify={notify} />;
       case 'configuration':

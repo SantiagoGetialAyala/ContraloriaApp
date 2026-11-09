@@ -9,6 +9,7 @@ from django.contrib.auth.models import Group, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -36,7 +37,9 @@ from .models import (
     ROLES,
     Case,
     CompensatoryLedgerEntry,
+    Dependencia,
     Event,
+    Holiday,
     LoginAttempt,
     PolicyVersion,
     Profile,
@@ -114,8 +117,19 @@ class CaseSerializer:
     def serialize_summary(cls, case):
         decorate(case)
         employment = ''
+        cedula = ''
+        cargo = ''
+        codigo = ''
+        grado = ''
+        hire_date = ''
         if hasattr(case.owner, 'profile'):
-            employment = case.owner.profile.get_employment_display()
+            p = case.owner.profile
+            employment = p.get_employment_display()
+            cedula = p.cedula or ''
+            cargo = p.cargo or ''
+            codigo = p.codigo or ''
+            grado = p.grado or ''
+            hire_date = p.hire_date.isoformat() if p.hire_date else ''
         return {
             'id': str(case.pk),
             'kind': case.kind,
@@ -126,6 +140,11 @@ class CaseSerializer:
                 'username': case.owner.username,
                 'full_name': case.owner.get_full_name() or case.owner.username,
                 'employment': employment,
+                'cedula': cedula,
+                'cargo': cargo,
+                'codigo': codigo,
+                'grado': grado,
+                'hire_date': hire_date,
             },
             'department': case.department,
             'stage': case.stage,
@@ -876,6 +895,202 @@ class CaseVacationInterruptionApiView(BaseApiView):
         )
 
 
+class VacationDashboardApiView(BaseApiView):
+    """Panel integral y calendario anual/mensual de Gestión de Vacaciones."""
+
+    def get(self, request):
+        today = timezone.localdate()
+        try:
+            year = int(request.GET.get('year') or today.year)
+        except (TypeError, ValueError):
+            year = today.year
+        year = max(2020, min(2035, year))
+
+        if not Holiday.objects.filter(date__year=year).exists():
+            vacations.load_holidays(year)
+        if not Holiday.objects.filter(date__year=year + 1).exists():
+            vacations.load_holidays(year + 1)
+
+        holidays = [
+            {'date': h.date.isoformat(), 'name': h.name}
+            for h in Holiday.objects.filter(date__year__in=[year, year + 1]).order_by('date')
+        ]
+
+        roles = role_names(request.user)
+        can_manage_all = bool(roles & {'talento', 'autoridad', 'control', 'secretaria', 'administrador'})
+        is_talento = 'talento' in roles
+
+        visible_vac_cases = list(
+            visible_cases(request.user)
+            .filter(kind='vacaciones')
+            .exclude(stage='rechazado')
+            .select_related('owner', 'owner__profile', 'policy')
+            .order_by('data__start_date', '-created_at')
+        )
+
+        employees_qs = User.objects.filter(is_active=True).select_related('profile', 'profile__dependencia').order_by('first_name', 'username')
+        if not can_manage_all:
+            user_dept = getattr(getattr(request.user, 'profile', None), 'department', '')
+            employees_qs = employees_qs.filter(
+                Q(pk=request.user.pk)
+                | Q(profile__dependencia__jefe=request.user)
+                | (Q(profile__department=user_dept) if user_dept else Q(pk=request.user.pk))
+            )
+
+        employees_data = []
+        emp_period_map = {}
+        dependencias_set = set()
+
+        for d in Dependencia.objects.order_by('name'):
+            if d.name:
+                dependencias_set.add(d.name)
+
+        for emp in employees_qs:
+            prof = getattr(emp, 'profile', None)
+            dept_name = (prof.department if prof else '') or 'General'
+            dependencias_set.add(dept_name)
+            employment = prof.employment if prof else 'funcionario'
+            cargo = (prof.cargo if prof and prof.cargo else (prof.get_employment_display() if prof else 'Funcionario'))
+            hire_date_str = prof.hire_date.isoformat() if (prof and prof.hire_date) else ''
+            periods_list = []
+            total_balance = 0
+            problem = None
+            if employment == 'funcionario':
+                try:
+                    for row in vacations.period_summary(emp, today):
+                        p_obj = row['period']
+                        bal = row['balance']
+                        if not row['prescribed'] and bal > 0:
+                            total_balance += bal
+                        periods_list.append({
+                            'number': p_obj.number,
+                            'label': p_obj.label,
+                            'service_from': p_obj.service_from.isoformat(),
+                            'service_to': p_obj.service_to.isoformat(),
+                            'balance': bal,
+                            'reserved': row['reserved'],
+                            'prescribes_on': row['prescribes_on'].isoformat(),
+                            'prescribed': row['prescribed'],
+                        })
+                except ValidationError as exc:
+                    problem = ' '.join(exc.messages)
+
+            emp_info = {
+                'id': emp.pk,
+                'username': emp.username,
+                'name': emp.get_full_name() or emp.username,
+                'role': cargo,
+                'dept': dept_name,
+                'employment': employment,
+                'hire_date': hire_date_str,
+                'total_balance': total_balance,
+                'periods': periods_list,
+                'problem': problem,
+            }
+            employees_data.append(emp_info)
+            emp_period_map[emp.pk] = emp_info
+
+        schedule_items = []
+        granted_count = 0
+        in_progress_count = 0
+
+        for case in visible_vac_cases:
+            decorate(case)
+            data = case.data or {}
+            if data.get('interruption_kind') == 'aplazamiento':
+                continue
+            start_str = data.get('start_date') or ''
+            end_str = data.get('end_date') or start_str
+            if start_str and not (start_str.startswith(str(year)) or end_str.startswith(str(year))):
+                continue
+
+            if case.stage in {'disfrute', 'cerrado'}:
+                granted_count += 1
+                status_code = 'suspendida' if data.get('interruption_kind') == 'suspension' else 'concedida'
+            else:
+                in_progress_count += 1
+                status_code = 'en_tramite'
+
+            emp_info = emp_period_map.get(case.owner_id, {})
+            prof = getattr(case.owner, 'profile', None)
+            cargo = (prof.cargo if prof and prof.cargo else (prof.get_employment_display() if prof else 'Funcionario'))
+            dept_name = case.department or (prof.department if prof else 'General')
+            dependencias_set.add(dept_name)
+
+            schedule_items.append({
+                'id': str(case.pk),
+                'case_id': str(case.pk),
+                'reference': case.reference,
+                'employee_id': case.owner_id,
+                'name': case.owner.get_full_name() or case.owner.username,
+                'role': cargo,
+                'dept': dept_name,
+                'start': start_str,
+                'end': end_str,
+                'return_date': data.get('return_date') or '',
+                'business_days': int(data.get('business_days') or 15),
+                'calendar_days': int(data.get('days') or 0),
+                'stage': case.stage,
+                'stage_label': case.stage_label,
+                'status': status_code,
+                'period_label': data.get('period_label') or 'Periodo por asignar',
+                'balance_days': emp_info.get('total_balance', 15),
+            })
+
+        own_info = emp_period_map.get(request.user.pk)
+        own_balance = own_info['total_balance'] if own_info else 0
+
+        services.audit(None, request.user, 'Panel de gestión de vacaciones consultado', year=year, count=len(schedule_items))
+        return self.json_success({
+            'today': today.isoformat(),
+            'year': year,
+            'can_manage_all': can_manage_all,
+            'is_talento': is_talento,
+            'dependencias': sorted(d for d in dependencias_set if d),
+            'holidays': holidays,
+            'schedule': schedule_items,
+            'employees': employees_data,
+            'stats': {
+                'total_cases': len(schedule_items),
+                'granted_count': granted_count,
+                'in_progress_count': in_progress_count,
+                'own_balance': own_balance,
+            },
+        })
+
+    def post(self, request):
+        body = self.parse_body(request)
+        action = body.get('action')
+        if action == 'initial_balance':
+            employee = get_object_or_404(User, pk=int(body.get('employee_id') or 0))
+            period_number = int(body.get('period_number') or 1)
+            days = int(body.get('days') or 0)
+            note = str(body.get('note') or '').strip()
+            services.register_initial_vacation_days(request.user, employee, period_number, days, note)
+            return self.json_success(message='Saldo inicial de vacaciones registrado.')
+        elif action == 'save_holiday':
+            roles = role_names(request.user)
+            if not roles & {'talento', 'autoridad', 'administrador'}:
+                raise PermissionDenied('Solo Talento Humano puede gestionar el calendario de festivos.')
+            raw_date = str(body.get('date') or '').strip()
+            name = str(body.get('name') or '').strip()
+            if not raw_date or not name:
+                raise ValidationError('Indique la fecha y el nombre del día festivo.')
+            h_date = date.fromisoformat(raw_date)
+            holiday, _ = Holiday.objects.update_or_create(date=h_date, defaults={'name': name})
+            services.audit(None, request.user, 'Festivo registrado o actualizado', date=h_date.isoformat(), name=holiday.name)
+            return self.json_success(message=f'Festivo «{holiday.name}» guardado para el {h_date.isoformat()}.')
+        elif action == 'load_year_holidays':
+            roles = role_names(request.user)
+            if not roles & {'talento', 'autoridad', 'administrador'}:
+                raise PermissionDenied('Solo Talento Humano puede precargar festivos oficiales.')
+            target_year = int(body.get('year') or timezone.localdate().year)
+            created = vacations.load_holidays(target_year)
+            services.audit(None, request.user, 'Festivos anuales precargados', year=target_year, created=created)
+            return self.json_success(message=f'Festivos de Colombia para {target_year} verificados ({created} nuevos).')
+        return self.json_error('Acción de vacaciones desconocida.', status=400)
+
+
 class CompensatoryCalendarApiView(BaseApiView):
     """Consulta del calendario de compensatorios autorizados y saldos personales."""
 
@@ -1113,8 +1328,10 @@ class UserAccessApiView(BaseApiView):
             if d['password']:
                 target_user.set_password(d['password'])
             target_user.save()
-            profile, _ = Profile.objects.get_or_create(user=target_user)
-            if d.get('department'):
+            profile = Profile.objects.filter(user=target_user).select_related('dependencia').first() or Profile(user=target_user, department='')
+            d['department'] = d.get('department') or profile.department
+            d['employment'] = d.get('employment') or profile.employment
+            if d['department']:
                 services.apply_profile(profile, d)
             target_user.groups.set([Group.objects.get_or_create(name=r)[0] for r in d['roles']])
             services.audit(

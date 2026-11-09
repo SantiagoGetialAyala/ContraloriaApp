@@ -1,5 +1,8 @@
-import { CalculadoraTramite } from '../domain/Formatters';
+import { CalculadoraTramite, FormateadorTexto } from '../domain/Formatters';
+import { CalendarioLaboralColombia } from '../domain/PlanVacaciones';
 import type { CaseKind, FieldSchemaDTO } from '../domain/types';
+
+const calendarioColombia = new CalendarioLaboralColombia();
 
 interface DynamicFieldsProps {
   schema: FieldSchemaDTO[];
@@ -28,6 +31,22 @@ export function DynamicFields({
     workEnd,
     breakMins,
   );
+
+  const businessDaysVal = Number(values.business_days || 0);
+  const showVacationPreview =
+    kind === 'vacaciones' &&
+    Boolean(startDate) &&
+    businessDaysVal >= 1 &&
+    businessDaysVal <= 15 &&
+    schema.some((f) => f.key === 'business_days');
+  const startIsBusinessDay =
+    showVacationPreview &&
+    calendarioColombia.esDiaHabil(CalendarioLaboralColombia.parseISO(startDate));
+  const vacEndIso =
+    showVacationPreview && startIsBusinessDay
+      ? calendarioColombia.calcularFechaFinHabil(startDate, businessDaysVal)
+      : '';
+  const vacReturnIso = vacEndIso ? calendarioColombia.calcularSiguienteDiaHabil(vacEndIso) : '';
 
   return (
     <>
@@ -143,6 +162,34 @@ export function DynamicFields({
           <div>
             <strong>Tiempo efectivo estimado: {calculatedMinutes} minutos</strong>
             <p>Calculado automáticamente descontando los minutos de pausa indicados.</p>
+          </div>
+        </div>
+      )}
+
+      {showVacationPreview && (
+        <div className="notice compact">
+          <span className="notice-icon">☀</span>
+          <div>
+            {startIsBusinessDay ? (
+              <>
+                <strong>
+                  Disfrute estimado: del {FormateadorTexto.fechaCorta(startDate)} al{' '}
+                  {FormateadorTexto.fechaCorta(vacEndIso)} ({businessDaysVal} día
+                  {businessDaysVal === 1 ? '' : 's'} hábiles)
+                </strong>
+                <p>
+                  Reintegro previsto: <strong>{FormateadorTexto.fechaCorta(vacReturnIso)}</strong>{' '}
+                  (descontando sábados, domingos y festivos de Colombia).
+                </p>
+              </>
+            ) : (
+              <>
+                <strong>La fecha de inicio seleccionada no es un día hábil</strong>
+                <p>
+                  Las vacaciones deben iniciar en un día hábil (no sábado, domingo ni festivo).
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -97,8 +97,7 @@ export function DashboardPage({ usuario, onNotify }: DashboardPageProps) {
           <div className="dropdown">
             <AppLink to="/modulos/incapacidad/nuevo">✚ &nbsp; Incapacidad o licencia</AppLink>
             <AppLink to="/modulos/viatico/nuevo">↗ &nbsp; Comisión de servicio</AppLink>
-            <AppLink to="/modulos/compensatorio/nuevo">◷ &nbsp; Tiempo trabajado</AppLink>
-            <AppLink to="/modulos/vacaciones/nuevo">☀ &nbsp; Vacaciones</AppLink>
+            <AppLink to="/modulos/vacaciones/nuevo">☀ &nbsp; Solicitud de vacaciones</AppLink>
           </div>
         </details>
       </header>
@@ -222,7 +221,7 @@ export function DashboardPage({ usuario, onNotify }: DashboardPageProps) {
             <header className="card-heading">
               <div>
                 <h2>Módulos de gestión</h2>
-                <p>Cuatro procedimientos, un expediente trazable.</p>
+                <p>Tres procedimientos, un expediente trazable.</p>
               </div>
               <span className="overline">TALENTO HUMANO</span>
             </header>
@@ -249,21 +248,13 @@ export function DashboardPage({ usuario, onNotify }: DashboardPageProps) {
                   <span className="round-arrow">↗</span>
                 </div>
               </AppLink>
-              <AppLink className="module-card" to="/modulos/compensatorio">
-                <div className="module-icon">◷</div>
-                <h3>Gestión de compensatorios</h3>
-                <p>Registro, soportes, autorizaciones, saldo, calendario e historial.</p>
-                <div className="module-bottom">
-                  <span>
-                    {kinds.compensatorio.count} expedientes · {kinds.compensatorio.closed} cerrados
-                  </span>
-                  <span className="round-arrow">↗</span>
-                </div>
-              </AppLink>
               <AppLink className="module-card" to="/modulos/vacaciones">
                 <div className="module-icon">☀</div>
-                <h3>Vacaciones</h3>
-                <p>Programación por días hábiles, visto bueno del jefe y control de periodos.</p>
+                <h3>Gestión de vacaciones</h3>
+                <p>
+                  Plan anual Ene–Dic, calendario mensual, días hábiles, cruces por dependencia y
+                  saldos por periodo.
+                </p>
                 <div className="module-bottom">
                   <span>
                     {kinds.vacaciones.count} expedientes · {kinds.vacaciones.closed} cerrados

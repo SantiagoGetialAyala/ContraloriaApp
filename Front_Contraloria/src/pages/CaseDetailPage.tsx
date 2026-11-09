@@ -360,10 +360,54 @@ export function CaseDetailPage({
             {expediente.ownerName} · {expediente.department} · {expediente.ownerEmployment}
           </p>
         </div>
-        <AppLink className="btn secondary" to={`/modulos/${expediente.kind}`}>
-          ← Volver a expedientes
-        </AppLink>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }} className="no-print">
+          {expediente.kind === 'vacaciones' && (
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => window.print()}
+            >
+              🖨 Imprimir formato para firma
+            </button>
+          )}
+          <AppLink className="btn secondary" to={`/modulos/${expediente.kind}`}>
+            ← Volver a expedientes
+          </AppLink>
+        </div>
       </header>
+
+      {expediente.kind === 'vacaciones' && (
+        <div className="print-only-sheet">
+          <h2>CONTRALORÍA MUNICIPAL DE PASTO · TALENTO HUMANO</h2>
+          <p>
+            <strong>FORMATO DE PROGRAMACIÓN Y SOLICITUD DE VACACIONES · {expediente.reference}</strong>
+          </p>
+          <p>
+            Funcionario: <strong>{expediente.ownerName}</strong> · Cédula:{' '}
+            <strong>{det.owner.cedula || '—'}</strong> · Cargo:{' '}
+            <strong>{det.owner.cargo || expediente.ownerEmployment}</strong> · Código:{' '}
+            <strong>{det.owner.codigo || '—'}</strong> · Grado:{' '}
+            <strong>{det.owner.grado || '—'}</strong>
+          </p>
+          <p>
+            Dependencia: <strong>{expediente.department}</strong> · Fecha de ingreso:{' '}
+            <strong>{det.owner.hire_date || '—'}</strong>
+          </p>
+          <p>
+            Periodo de causación: <strong>{String(expediente.data.period_label || '—')}</strong> ·
+            Días hábiles: <strong>{String(expediente.data.business_days || '—')}</strong> · Inicio:{' '}
+            <strong>{String(expediente.data.start_date || '—')}</strong> · Último día de disfrute:{' '}
+            <strong>{String(expediente.data.end_date || '—')}</strong> · Reintegro previsto:{' '}
+            <strong>{String(expediente.data.return_date || '—')}</strong>
+          </p>
+          <div className="print-signatures">
+            <div className="print-sig-box">Firma del Funcionario Solicitante</div>
+            <div className="print-sig-box">Visto Bueno · Jefe Inmediato</div>
+            <div className="print-sig-box">Verificación · Talento Humano</div>
+            <div className="print-sig-box">Autoridad Competente</div>
+          </div>
+        </div>
+      )}
 
       {!expediente.policyConfirmed && (
         <div className="notice">
@@ -623,6 +667,34 @@ export function CaseDetailPage({
 
             {det.vacation && (
               <>
+                {/* Línea de tiempo: Inicio → Fin → Reintegro (Sección 6.5 de la Guía) */}
+                {Boolean(expediente.data.start_date) && (
+                  <div className="vac-timeline">
+                    <div className="vac-timeline-step">
+                      <small>1 · Inicio de disfrute</small>
+                      <strong>
+                        {FormateadorTexto.fechaCorta(String(expediente.data.start_date))}
+                      </strong>
+                    </div>
+                    <div className="vac-timeline-step">
+                      <small>2 · Último día ({String(expediente.data.business_days || '—')} días hábiles)</small>
+                      <strong>
+                        {expediente.data.end_date
+                          ? FormateadorTexto.fechaCorta(String(expediente.data.end_date))
+                          : 'Por calcular'}
+                      </strong>
+                    </div>
+                    <div className="vac-timeline-step">
+                      <small>3 · Reintegro previsto</small>
+                      <strong>
+                        {expediente.data.return_date
+                          ? FormateadorTexto.fechaCorta(String(expediente.data.return_date))
+                          : 'Por calcular'}
+                      </strong>
+                    </div>
+                  </div>
+                )}
+
                 {det.vacation.problem && (
                   <div className="notice compact">
                     <p>{det.vacation.problem}</p>
@@ -640,20 +712,38 @@ export function CaseDetailPage({
                         </tr>
                       </thead>
                       <tbody>
-                        {det.vacation.periods.map((row) => (
-                          <tr key={row.number}>
-                            <td>{row.label}</td>
-                            <td>{row.balance} días</td>
-                            <td>{row.reserved} días</td>
-                            <td>
-                              {row.prescribed ? (
-                                <span className="badge danger">Prescrito</span>
-                              ) : (
-                                FormateadorTexto.fechaCorta(row.prescribes_on)
-                              )}
-                            </td>
-                          </tr>
-                        ))}
+                        {det.vacation.periods.map((row) => {
+                          const isAssigned =
+                            String(expediente.data.period_label || '') === row.label;
+                          return (
+                            <tr
+                              key={row.number}
+                              style={
+                                isAssigned
+                                  ? { background: '#f0f5ea', fontWeight: 600 }
+                                  : undefined
+                              }
+                            >
+                              <td>
+                                {row.label}{' '}
+                                {isAssigned && (
+                                  <span className="badge success" style={{ marginLeft: 6 }}>
+                                    Asignado
+                                  </span>
+                                )}
+                              </td>
+                              <td>{row.balance} días</td>
+                              <td>{row.reserved} días</td>
+                              <td>
+                                {row.prescribed ? (
+                                  <span className="badge danger">Prescrito</span>
+                                ) : (
+                                  FormateadorTexto.fechaCorta(row.prescribes_on)
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
