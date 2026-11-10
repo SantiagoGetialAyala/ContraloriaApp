@@ -1,3 +1,4 @@
+import { LoadError } from '../components/LoadError';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AppLink } from '../components/AppLink';
 import type { UsersDirectoryDTO } from '../domain/types';
@@ -181,7 +182,7 @@ export function UsersPage({ selectedUserId, onNotify }: UsersPageProps) {
     );
   }
 
-  if (!data) return null;
+  if (!data) return <LoadError />;
 
   if (selectedUserId) {
     const targetUser = data.users.find((u) => u.id === selectedUserId);

@@ -11,6 +11,19 @@ KINDS = [
 ]
 ROLES = [('solicitante', 'Funcionario / solicitante'), ('talento', 'Talento Humano'), ('juridica', 'Asesoría Jurídica'), ('tesoreria', 'Tesorería'), ('contabilidad', 'Contabilidad'), ('presupuesto', 'Presupuesto'), ('secretaria', 'Secretaría de Despacho'), ('autoridad', 'Contralor / autoridad competente'), ('control', 'Control Interno'), ('administrador', 'Administrador del sistema')]
 
+EMPLOYEE_DOC_CATEGORIES = [
+    ('hoja_vida', 'Hoja de vida (Formato Único / CV)'),
+    ('documento_identidad', 'Documento de identidad / Cédula'),
+    ('diploma_acta', 'Título académico / Diploma / Acta de grado'),
+    ('tarjeta_profesional', 'Tarjeta profesional'),
+    ('certificacion_laboral', 'Certificación de experiencia laboral'),
+    ('contrato_posesion', 'Contrato / Acto de nombramiento y posesión'),
+    ('antecedentes', 'Certificados de antecedentes (Procuraduría, Contraloría, Policía)'),
+    ('examen_medico', 'Examen médico ocupacional'),
+    ('rut_bancario', 'RUT / Certificación bancaria'),
+    ('otro_soporte', 'Otro documento o soporte de hoja de vida'),
+]
+
 class Dependencia(models.Model):
     """Área institucional. Su jefe da el visto bueno a las vacaciones de su equipo."""
 
@@ -35,6 +48,29 @@ class Profile(models.Model):
     codigo = models.CharField(max_length=10, blank=True)
     grado = models.CharField(max_length=10, blank=True)
     hire_date = models.DateField(null=True, blank=True)
+    phone = models.CharField(max_length=40, blank=True)
+    institutional_email = models.EmailField(max_length=160, blank=True)
+    profession = models.CharField(max_length=160, blank=True)
+    bio = models.TextField(blank=True)
+
+
+class EmployeeDocument(models.Model):
+    """Documentos y hojas de vida asociados directamente al expediente personal del funcionario/contratista."""
+
+    employee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='employee_documents')
+    category = models.CharField(max_length=50, choices=EMPLOYEE_DOC_CATEGORIES, default='hoja_vida')
+    title = models.CharField(max_length=200, blank=True)
+    notes = models.TextField(blank=True)
+    name = models.CharField(max_length=200)
+    content_type = models.CharField(max_length=100)
+    content = models.BinaryField()
+    sha256 = models.CharField(max_length=64)
+    size = models.PositiveIntegerField()
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='uploaded_employee_documents')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
 
 class PolicyVersion(models.Model):
     kind = models.CharField(max_length=20, choices=KINDS)

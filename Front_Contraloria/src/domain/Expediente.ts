@@ -1,4 +1,4 @@
-import { CalculadoraTramite, FormateadorTexto } from './Formatters';
+import { FormateadorTexto } from './Formatters';
 import type {
   CaseDetailDTO,
   CaseKind,
@@ -226,12 +226,7 @@ export class ExpedienteIncapacidad extends ExpedienteBase {
       );
     }
     if (stepKey === 'pago_funcionario') {
-      const days = Number(this.data.days || 0);
-      if (days > 0) {
-        avisos.push(
-          `Criterio institucional de pago (Resolución 067/2025): ${CalculadoraTramite.determinarResponsablePagoIncapacidad(days)}`,
-        );
-      }
+      avisos.push('Registre la entidad pagadora, el valor efectivamente pagado y su soporte según la versión del procedimiento aplicable.');
     }
     if (stepKey === 'comprobante') {
       avisos.push(

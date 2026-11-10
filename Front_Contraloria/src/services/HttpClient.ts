@@ -50,6 +50,9 @@ export class HttpClient {
   }
 
   private async handleResponse<T>(response: Response): Promise<{ data: T; message?: string }> {
+    if (response.status === 401) {
+      window.dispatchEvent(new Event('talento:session-expired'));
+    }
     let json: ApiSuccessPayload<T> | ApiErrorPayload | null = null;
     try {
       json = await response.json();

@@ -1,6 +1,9 @@
 import type {
   AuditLogDTO,
   ConfigurationDTO,
+  EmployeeDocumentDTO,
+  HojaDeVidaDetailDTO,
+  HojasDeVidaDirectoryDTO,
   UsersDirectoryDTO,
 } from '../domain/types';
 import { BaseApiService } from './BaseApiService';
@@ -95,5 +98,58 @@ export class AdminService extends BaseApiService {
       '/api/audit/',
       page > 1 ? { page: String(page) } : {},
     );
+  }
+
+  public async listarHojasDeVida(): Promise<HojasDeVidaDirectoryDTO> {
+    return this.http.get<HojasDeVidaDirectoryDTO>('/api/hojas-de-vida/');
+  }
+
+  public async crearPersonaHojaDeVida(
+    formData: FormData,
+  ): Promise<{ user_id: number; message: string }> {
+    const res = await this.http.postFormData<{ user_id: number }>(
+      '/api/hojas-de-vida/',
+      formData,
+    );
+    return {
+      user_id: res.data.user_id,
+      message: res.message || 'Persona creada correctamente.',
+    };
+  }
+
+  public async obtenerHojaDeVida(userId: number): Promise<HojaDeVidaDetailDTO> {
+    return this.http.get<HojaDeVidaDetailDTO>(`/api/hojas-de-vida/${userId}/`);
+  }
+
+  public async actualizarHojaDeVida(
+    userId: number,
+    payload: Record<string, unknown>,
+  ): Promise<string> {
+    const res = await this.http.post<undefined>(`/api/hojas-de-vida/${userId}/`, payload);
+    return res.message || 'Datos de la hoja de vida actualizados.';
+  }
+
+  public async subirDocumentoHojaDeVida(
+    userId: number,
+    formData: FormData,
+  ): Promise<{ doc: EmployeeDocumentDTO; message: string }> {
+    const res = await this.http.postFormData<EmployeeDocumentDTO>(
+      `/api/hojas-de-vida/${userId}/documentos/`,
+      formData,
+    );
+    return {
+      doc: res.data,
+      message: res.message || 'Documento incorporado a la hoja de vida.',
+    };
+  }
+
+  public async eliminarDocumentoHojaDeVida(
+    userId: number,
+    documentId: number,
+  ): Promise<string> {
+    const res = await this.http.post<undefined>(
+      `/api/hojas-de-vida/${userId}/documentos/${documentId}/eliminar/`,
+    );
+    return res.message || 'Documento eliminado.';
   }
 }

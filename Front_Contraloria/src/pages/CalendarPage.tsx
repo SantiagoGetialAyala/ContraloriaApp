@@ -1,3 +1,4 @@
+import { LoadError } from '../components/LoadError';
 import { useEffect, useState } from 'react';
 import { AppLink } from '../components/AppLink';
 import { FormateadorTexto } from '../domain/Formatters';
@@ -40,7 +41,7 @@ export function CalendarPage({ onNotify }: CalendarPageProps) {
     );
   }
 
-  if (!data) return null;
+  if (!data) return <LoadError />;
 
   return (
     <>

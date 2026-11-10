@@ -69,6 +69,8 @@ export function PasswordPage({ onNotify }: PasswordPageProps) {
             </label>
             <input
               id="old_password"
+              name="old_password"
+              autoComplete="current-password"
               type="password"
               required
               value={oldPassword}
@@ -81,6 +83,9 @@ export function PasswordPage({ onNotify }: PasswordPageProps) {
             </label>
             <input
               id="new_password1"
+              name="new_password1"
+              autoComplete="new-password"
+              minLength={12}
               type="password"
               required
               value={newPassword1}
@@ -93,6 +98,9 @@ export function PasswordPage({ onNotify }: PasswordPageProps) {
             </label>
             <input
               id="new_password2"
+              name="new_password2"
+              autoComplete="new-password"
+              minLength={12}
               type="password"
               required
               value={newPassword2}

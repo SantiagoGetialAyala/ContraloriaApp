@@ -1,32 +1,26 @@
-# React + TypeScript + Vite
+﻿# Interfaz de Talento Humano
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React, TypeScript y Vite. Requiere el backend Django de la carpeta superior.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+cd "C:\Users\isamu\Desktop\Contraloria\ContraloriaApp\Front_Contraloria"
+npm ci
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Abra http://localhost:5173. Vite dirige API, documentos y reportes a http://127.0.0.1:8000. La sesión utiliza cookies de Django y protección CSRF.
+
+La configuración inicial se ofrece si la base está vacía. En instalaciones existentes, use una cuenta registrada. Administración gestiona accesos; Administración y Talento Humano gestionan hojas de vida. Aprobar etapas requiere el rol operativo correspondiente.
+
+```powershell
+npm run build
+npm run lint
+npx playwright install chromium
+npm run test:e2e
+```
+
+Playwright crea una base temporal y utiliza los puertos 8011 y 5177. Las cuentas de tests/e2e_server.py pertenecen exclusivamente a esa base. Las capturas se guardan en test-results/, excluido de Git.
+
+npm run preview permite revisar el build con Django iniciado. TALENTO_API_TARGET permite configurar otro backend local. Un despliegue institucional requiere HTTPS, servidor WSGI y proxy del mismo origen; Vite sirve para desarrollo y revisión local.
+
+Consulte [las instrucciones completas](../README.md) y [la revisión funcional](../docs/revision-aplicacion.md).

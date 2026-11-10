@@ -1,25 +1,28 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { LoadError } from '../components/LoadError';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AppLink } from '../components/AppLink';
 import { FormateadorTexto } from '../domain/Formatters';
 import {
   AnalizadorCrucesVacaciones,
   CalendarioLaboralColombia,
-  PlanAnualDemoFactory,
   ProgramacionVacacionItem,
   type ReglaCruceVacaciones,
 } from '../domain/PlanVacaciones';
+import type { UsuarioSesion } from '../domain/Usuario';
 import type { VacationDashboardDTO } from '../domain/types';
 import type { CaseListViewModel } from '../services/ExpedienteService';
 import { ApiError } from '../services/HttpClient';
 import { appServices } from '../services/ServiceContainer';
 
 interface VacationDashboardPageProps {
+  usuario: UsuarioSesion;
   initialTab?: 'calendar' | 'annual' | 'cases' | 'balances';
   onNotify: (type: 'success' | 'error' | 'warning', text: string) => void;
 }
 
 export function VacationDashboardPage({
-  initialTab = 'calendar',
+  usuario,
+  initialTab = 'cases',
   onNotify,
 }: VacationDashboardPageProps) {
   const [dashData, setDashData] = useState<VacationDashboardDTO | null>(null);
@@ -27,19 +30,28 @@ export function VacationDashboardPage({
   const [loading, setLoading] = useState(true);
 
   // Modo de visualización principal
-  const [mode, setMode] = useState<'calendar' | 'annual' | 'cases' | 'balances'>(initialTab);
-  const [year, setYear] = useState<number>(2026);
-  const [currentMonth, setCurrentMonth] = useState<number>(10); // 10 = Noviembre (0-indexed)
+  const [mode, setModeState] = useState<'calendar' | 'annual' | 'cases' | 'balances'>(() => {
+    const view = new URLSearchParams(window.location.search).get('vista');
+    return view === 'calendar' || view === 'annual' || view === 'cases' || view === 'balances' ? view : initialTab;
+  });
+  const setMode = (value: 'calendar' | 'annual' | 'cases' | 'balances') => {
+    setModeState(value);
+    const url = new URL(window.location.href);
+    url.searchParams.set('vista', value);
+    window.history.replaceState({}, '', url.pathname + url.search);
+  };
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth());
   const [currentDept, setCurrentDept] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [rule, setRule] = useState<ReglaCruceVacaciones>('DEPT');
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
-  const [useDemoPlan, setUseDemoPlan] = useState<boolean>(false);
 
   // Modal de simulación / programación
   const [modalOpen, setModalOpen] = useState<boolean>(false);
-  const [simWorkerId, setSimWorkerId] = useState<string>('');
-  const [simStart, setSimStart] = useState<string>('2026-06-16');
+  const [simWorkerId, setSimWorkerId] = useState(() => String(usuario.id));
+  const modalRef = useRef<HTMLDialogElement>(null);
+  const [simStart, setSimStart] = useState(() => CalendarioLaboralColombia.toISO(new Date()));
   const [simDays, setSimDays] = useState<number>(15);
   const [simObservations, setSimObservations] = useState<string>('');
   const [busy, setBusy] = useState<boolean>(false);
@@ -68,9 +80,6 @@ export function VacationDashboardPage({
         ]);
         setDashData(dRes);
         setCasesVm(cRes);
-        if (dRes.schedule.length === 0) {
-          setUseDemoPlan(true);
-        }
         if (dRes.employees.length > 0) {
           setInitEmpId((prev) => prev || String(dRes.employees[0].id));
         }
@@ -96,15 +105,6 @@ export function VacationDashboardPage({
         if (!active) return;
         setDashData(dRes);
         setCasesVm(cRes);
-        if (dRes.schedule.length === 0) {
-          setUseDemoPlan(true);
-        } else {
-          setUseDemoPlan(false);
-          const firstStart = dRes.schedule[0]?.start;
-          if (firstStart) {
-            setCurrentMonth(CalendarioLaboralColombia.parseISO(firstStart).getMonth());
-          }
-        }
         if (dRes.employees.length > 0) {
           setInitEmpId(String(dRes.employees[0].id));
         }
@@ -131,11 +131,8 @@ export function VacationDashboardPage({
   );
 
   const todosLosRegistros = useMemo<ProgramacionVacacionItem[]>(() => {
-    if (useDemoPlan) {
-      return PlanAnualDemoFactory.crearPlanReferencia(year);
-    }
     return (dashData?.schedule || []).map((dto) => new ProgramacionVacacionItem(dto));
-  }, [useDemoPlan, dashData?.schedule, year]);
+  }, [dashData?.schedule]);
 
   const departamentosDisponibles = useMemo<string[]>(() => {
     const set = new Set<string>(dashData?.dependencias || []);
@@ -193,41 +190,30 @@ export function VacationDashboardPage({
   };
 
   const avanzarMes = (delta: number) => {
-    setCurrentMonth((prev) => (prev + delta + 12) % 12);
+    const target = new Date(year, currentMonth + delta, 1);
+    if (target.getFullYear() < 2020 || target.getFullYear() > 2035) return;
+    setYear(target.getFullYear());
+    setCurrentMonth(target.getMonth());
   };
 
+  useEffect(() => {
+    if (modalOpen) modalRef.current?.showModal();
+  }, [modalOpen]);
+
   const abrirSimulador = () => {
-    if (!simWorkerId && todosLosRegistros.length > 0) {
-      setSimWorkerId(todosLosRegistros[0].id);
-    }
+    setSimWorkerId(String(usuario.id));
     setModalOpen(true);
   };
 
   const workerSimulado = useMemo(() => {
-    return (
-      todosLosRegistros.find((w) => w.id === simWorkerId) ||
-      todosLosRegistros[0] ||
-      new ProgramacionVacacionItem({
-        id: 'own',
-        case_id: null,
-        reference: 'NUEVA',
-        employee_id: dashData?.employees[0]?.id || 1,
-        name: dashData?.employees[0]?.name || 'Funcionario',
-        role: dashData?.employees[0]?.role || 'Funcionario',
-        dept: dashData?.employees[0]?.dept || 'Control Fiscal',
-        start: simStart,
-        end: simStart,
-        return_date: simStart,
-        business_days: simDays,
-        calendar_days: simDays,
-        stage: 'borrador',
-        stage_label: 'Solicitud de vacaciones',
-        status: 'en_tramite',
-        period_label: 'Periodo disponible',
-        balance_days: 15,
-      })
-    );
-  }, [todosLosRegistros, simWorkerId, dashData, simStart, simDays]);
+    const worker = dashData?.employees.find((employee) => String(employee.id) === simWorkerId);
+    return {
+      employeeId: worker?.id ?? usuario.id,
+      dept: worker?.dept ?? usuario.dependencia,
+      name: worker?.name ?? usuario.nombreCompleto,
+    };
+  }, [dashData?.employees, simWorkerId, usuario]);
+  const ownSimulation = workerSimulado.employeeId === usuario.id;
 
   const resultadoSimulacion = useMemo(() => {
     return AnalizadorCrucesVacaciones.simularProgramacion(
@@ -242,6 +228,7 @@ export function VacationDashboardPage({
 
   const handleRadicarDesdeSimulador = async (e: FormEvent) => {
     e.preventDefault();
+    if (!ownSimulation) return;
     setBusy(true);
     try {
       const { expediente, mensaje } = await appServices.expedientes.crearBorrador('vacaciones', {
@@ -332,7 +319,7 @@ export function VacationDashboardPage({
     );
   }
 
-  if (!dashData) return null;
+  if (!dashData) return <LoadError />;
 
   const celdasMes = calendario.construirCeldasMes(year, currentMonth);
   const festivosDelAnio = calendario.listarFestivosPorAnio(year);
@@ -347,11 +334,9 @@ export function VacationDashboardPage({
 
       <header className="page-heading">
         <div>
-          <div className="eyebrow">TALENTO HUMANO · PLANIFICACIÓN ANUAL</div>
           <h1>Gestión de vacaciones</h1>
           <p>
-            Programe vacaciones por días hábiles, verifique cruces por dependencia o globales,
-            controle saldos por periodo de causación y tramite cada expediente.
+            Consulte solicitudes, calendario y saldos de vacaciones.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -365,7 +350,7 @@ export function VacationDashboardPage({
       </header>
 
       {/* Tarjetas de resumen institucional */}
-      <div className="stats-grid">
+      {todosLosRegistros.length > 0 && <div className="stats-grid overview-stats">
         <article className="stat">
           <div className="stat-top">
             <span>Programaciones en vista ({year})</span>
@@ -374,7 +359,7 @@ export function VacationDashboardPage({
           <strong>{FormateadorTexto.dosDigitos(todosLosRegistros.length)}</strong>
           <p>
             <span className="dot green"></span>{' '}
-            {useDemoPlan ? 'Plan anual de referencia' : 'Expedientes registrados'}
+            Expedientes registrados
           </p>
         </article>
         <article className="stat">
@@ -413,7 +398,9 @@ export function VacationDashboardPage({
               : `Mi saldo disponible: ${dashData.stats.own_balance} días`}
           </p>
         </article>
-      </div>
+      </div>}
+
+      {todosLosRegistros.length === 0 && (mode === 'calendar' || mode === 'annual') && <div className="notice compact"><div><strong>Sin vacaciones registradas en {year}</strong><p>El calendario se completará con sus solicitudes. Puede crear un borrador o simular fechas.</p></div></div>}
 
       {/* Ventana Principal Unificada estilo Apple Calendar con Colorimetría Contraloría */}
       <div className="vac-window">
@@ -428,10 +415,11 @@ export function VacationDashboardPage({
           </div>
 
           {/* Segmented Control */}
-          <div className="vac-segmented" role="tablist" aria-label="Vistas de gestión de vacaciones">
+          <div className="vac-segmented" role="group" aria-label="Vistas de gestión de vacaciones">
             <button
               type="button"
               className={`vac-seg-btn ${mode === 'calendar' ? 'active' : ''}`}
+              aria-pressed={mode === 'calendar'}
               onClick={() => setMode('calendar')}
             >
               Mes
@@ -439,13 +427,15 @@ export function VacationDashboardPage({
             <button
               type="button"
               className={`vac-seg-btn ${mode === 'annual' ? 'active' : ''}`}
+              aria-pressed={mode === 'annual'}
               onClick={() => setMode('annual')}
             >
-              Año completo (Ene–Dic)
+              Año
             </button>
             <button
               type="button"
               className={`vac-seg-btn ${mode === 'cases' ? 'active' : ''}`}
+              aria-pressed={mode === 'cases'}
               onClick={() => setMode('cases')}
             >
               Expedientes ({casesVm?.dto.count ?? 0})
@@ -453,6 +443,7 @@ export function VacationDashboardPage({
             <button
               type="button"
               className={`vac-seg-btn ${mode === 'balances' ? 'active' : ''}`}
+              aria-pressed={mode === 'balances'}
               onClick={() => setMode('balances')}
             >
               Saldos y festivos
@@ -461,7 +452,7 @@ export function VacationDashboardPage({
 
           {/* Controles derechos */}
           <div className="vac-toolbar-actions">
-            <select
+            {mode !== 'cases' && <select
               aria-label="Año del plan"
               className="vac-select-compact"
               value={year}
@@ -470,9 +461,9 @@ export function VacationDashboardPage({
               <option value={2025}>Año 2025</option>
               <option value={2026}>Año 2026</option>
               <option value={2027}>Año 2027</option>
-            </select>
+            </select>}
 
-            <select
+            {(mode === 'calendar' || mode === 'annual') && <select
               aria-label="Regla de validación de cruces"
               className="vac-select-compact"
               value={rule}
@@ -480,31 +471,8 @@ export function VacationDashboardPage({
             >
               <option value="DEPT">Cruce por dependencia</option>
               <option value="GLOBAL">Cruce global (todos)</option>
-            </select>
+            </select>}
 
-            <button
-              type="button"
-              className="vac-select-compact"
-              style={{
-                cursor: 'pointer',
-                fontWeight: 600,
-                color: useDemoPlan ? '#214f40' : '#52654d',
-                borderColor: useDemoPlan ? '#9db67d' : '#dce3d7',
-              }}
-              onClick={() => {
-                setSelectedWorkerId(null);
-                setUseDemoPlan((prev) => !prev);
-              }}
-              title="Alternar entre expedientes reales registrados en base de datos y el Plan Anual 2026 de referencia"
-            >
-              {useDemoPlan
-                ? `Vista: Plan Anual Demo (${todosLosRegistros.length})`
-                : `Vista: Expedientes BD (${dashData.schedule.length})`}
-            </button>
-
-            <button type="button" className="btn primary" onClick={abrirSimulador}>
-              + Programar
-            </button>
           </div>
         </header>
 
@@ -517,6 +485,7 @@ export function VacationDashboardPage({
                 <input
                   type="search"
                   className="vac-search"
+                  aria-label="Buscar funcionario, dependencia o mes"
                   placeholder="Buscar funcionario, dependencia o mes…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -945,6 +914,9 @@ export function VacationDashboardPage({
                           <div
                             key={w.id}
                             className={rowClass}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); seleccionarTrabajador(w.id); } }}
                             onClick={() => seleccionarTrabajador(w.id)}
                           >
                             <div style={{ paddingRight: 10, minWidth: 0 }}>
@@ -1084,7 +1056,7 @@ export function VacationDashboardPage({
                   automáticamente al mes de sus vacaciones y resalta posibles cruces.
                 </span>
                 <span>
-                  Calendario laboral oficial de Colombia {year} ({festivosDelAnio.length} festivos
+                  Calendario registrado de {year} ({festivosDelAnio.length} festivos
                   computados)
                 </span>
               </div>
@@ -1359,7 +1331,7 @@ export function VacationDashboardPage({
                     <thead>
                       <tr>
                         <th>Fecha</th>
-                        <th>Conmemoración / Festivo oficial (Ley 51 de 1983)</th>
+                        <th>Nombre del festivo registrado</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1485,10 +1457,11 @@ export function VacationDashboardPage({
 
       {/* Modal para Simular o Programar Vacaciones en cualquier mes del año */}
       {modalOpen && (
-        <div
+        <dialog
+          ref={modalRef}
           className="vac-modal-backdrop"
-          onClick={() => setModalOpen(false)}
-          role="dialog"
+          onClose={() => setModalOpen(false)}
+          onCancel={(event) => { if (busy) event.preventDefault(); }}
           aria-modal="true"
           aria-label="Programar o simular vacaciones"
         >
@@ -1522,11 +1495,11 @@ export function VacationDashboardPage({
                 <label htmlFor="sim-worker-select">Funcionario de referencia (para cruce de área)</label>
                 <select
                   id="sim-worker-select"
-                  value={workerSimulado.id}
+                  value={simWorkerId}
                   onChange={(e) => setSimWorkerId(e.target.value)}
                 >
-                  {todosLosRegistros.map((w) => (
-                    <option key={w.id} value={w.id}>
+                  {(dashData.employees.length ? dashData.employees : [{ id: usuario.id, name: usuario.nombreCompleto, dept: usuario.dependencia }]).map((w) => (
+                    <option key={w.id} value={String(w.id)}>
                       {w.name} · {w.dept}
                     </option>
                   ))}
@@ -1538,6 +1511,8 @@ export function VacationDashboardPage({
                   <label htmlFor="sim-start-date">Fecha de inicio (día hábil)</label>
                   <input
                     id="sim-start-date"
+                    min={`${year}-01-01`}
+                    max={`${year}-12-31`}
                     type="date"
                     required
                     value={simStart}
@@ -1608,7 +1583,7 @@ export function VacationDashboardPage({
                 </div>
               ) : (
                 <div className="vac-sim-feedback ok">
-                  <strong>● Disponible · Sin ningún cruce</strong>
+                  <strong>Sin cruces registrados para estas fechas</strong>
                   <div>
                     Del{' '}
                     <strong>
@@ -1647,16 +1622,16 @@ export function VacationDashboardPage({
                 <button
                   type="submit"
                   className="btn primary"
-                  disabled={busy || resultadoSimulacion.sameDeptConflicts.length > 0}
+                  disabled={busy || !ownSimulation || resultadoSimulacion.sameDeptConflicts.length > 0 || !calendario.esDiaHabil(CalendarioLaboralColombia.parseISO(simStart))}
                 >
-                  {resultadoSimulacion.sameDeptConflicts.length > 0
+                  {!ownSimulation ? 'Solo consulta: no crea una solicitud de otra persona' : resultadoSimulacion.sameDeptConflicts.length > 0
                     ? 'No disponible por cruce en dependencia'
-                    : 'Radicar mi solicitud con estas fechas →'}
+                    : 'Crear mi borrador con estas fechas'}
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </dialog>
       )}
     </>
   );

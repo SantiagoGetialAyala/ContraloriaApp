@@ -18,6 +18,7 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
   const [errors, setErrors] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -78,26 +79,19 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
           </div>
           <div className="auth-copy">
             <div className="eyebrow light">TALENTO HUMANO</div>
-            <h1>
-              Las personas,
-              <br />
-              en el centro
-              <br />
-              de la gestión.
-            </h1>
+            <h2>Gestión de<br />Talento Humano</h2>
             <p>
-              Un espacio para tramitar incapacidades, gestionar recobros y acompañar cada comisión de
-              servicio.
+              Solicitudes, documentos y seguimiento de incapacidades, viáticos, vacaciones y compensatorios.
             </p>
             <div className="auth-features">
               <span>
-                01 <strong>Procesos organizados</strong>
+                <strong>Trámites por responsable</strong>
               </span>
               <span>
-                02 <strong>Documentos protegidos</strong>
+                <strong>Documentos protegidos</strong>
               </span>
               <span>
-                03 <strong>Decisiones trazables</strong>
+                <strong>Actuaciones registradas</strong>
               </span>
             </div>
           </div>
@@ -106,7 +100,7 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
         <section className="auth-form-wrap">
           <div className="auth-form">
             <span className="pill">{setupMode ? 'CONFIGURACIÓN INICIAL' : 'ACCESO INSTITUCIONAL'}</span>
-            <h2>{setupMode ? 'Configure su espacio institucional' : 'Bienvenido de nuevo'}</h2>
+            <h1>{setupMode ? 'Crear administrador' : 'Iniciar sesión'}</h1>
             <p className="muted">
               {setupMode
                 ? 'Cree el primer administrador. Después podrá registrar los usuarios y asignar sus responsabilidades.'
@@ -125,10 +119,12 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
               {setupMode && (
                 <div className={`field ${fieldErrors.name ? 'invalid' : ''}`}>
                   <label htmlFor="auth-name">
-                    Nombre completo <span className="required">*</span>
+                    Nombre completo <span className="required" aria-hidden="true">*</span>
                   </label>
                   <input
                     id="auth-name"
+                    name="name"
+                    autoComplete="name"
                     type="text"
                     required
                     value={name}
@@ -139,10 +135,15 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
 
               <div className={`field ${fieldErrors.username ? 'invalid' : ''}`}>
                 <label htmlFor="auth-username">
-                  {setupMode ? 'Usuario administrador' : 'Usuario'} <span className="required">*</span>
+                  {setupMode ? 'Usuario administrador' : 'Usuario'} <span className="required" aria-hidden="true">*</span>
                 </label>
                 <input
                   id="auth-username"
+                  name="username"
+                  autoComplete="username"
+                  spellCheck={false}
+                  autoCapitalize="none"
+                  aria-invalid={Boolean(fieldErrors.username)}
                   type="text"
                   required
                   value={username}
@@ -153,10 +154,12 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
               {setupMode && (
                 <div className={`field ${fieldErrors.department ? 'invalid' : ''}`}>
                   <label htmlFor="auth-department">
-                    Dependencia <span className="required">*</span>
+                    Dependencia <span className="required" aria-hidden="true">*</span>
                   </label>
                   <input
                     id="auth-department"
+                    name="department"
+                    autoComplete="organization"
                     type="text"
                     required
                     value={department}
@@ -168,24 +171,32 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
               <div className={`field ${fieldErrors.password ? 'invalid' : ''}`}>
                 <label htmlFor="auth-password">
                   {setupMode ? 'Contraseña (mínimo 12 caracteres)' : 'Contraseña'}{' '}
-                  <span className="required">*</span>
+                  <span className="required" aria-hidden="true">*</span>
                 </label>
                 <input
                   id="auth-password"
-                  type="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete={setupMode ? 'new-password' : 'current-password'}
+                  minLength={setupMode ? 12 : undefined}
+                  aria-invalid={Boolean(fieldErrors.password)}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
+              <label className="show-password"><input type="checkbox" checked={showPassword} onChange={(e) => setShowPassword(e.target.checked)} />Mostrar contraseña</label>
 
               {setupMode && (
                 <div className={`field ${fieldErrors.password_confirm ? 'invalid' : ''}`}>
                   <label htmlFor="auth-password-confirm">
-                    Repita la contraseña <span className="required">*</span>
+                    Repita la contraseña <span className="required" aria-hidden="true">*</span>
                   </label>
                   <input
                     id="auth-password-confirm"
+                    name="password_confirm"
+                    autoComplete="new-password"
+                    minLength={12}
                     type="password"
                     required
                     value={passwordConfirm}
@@ -195,10 +206,11 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
               )}
 
               <button className="btn primary full" type="submit" disabled={submitting}>
-                <span>{setupMode ? 'Crear administrador' : 'Ingresar al sistema'}</span>
+                <span>{submitting ? 'Procesando…' : setupMode ? 'Crear administrador' : 'Ingresar al sistema'}</span>
                 <span>→</span>
               </button>
             </form>
+            {!setupMode && <p className="help auth-help">Si olvidó su contraseña, solicite al administrador que restablezca su acceso.</p>}
             <div className="auth-note">
               ▣ &nbsp; Uso exclusivo de personal autorizado.
               <br />

@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AppLink } from '../components/AppLink';
 import { DynamicFields } from '../components/DynamicFields';
+import { LoadError } from '../components/LoadError';
+import { useUnsavedChanges } from '../components/useUnsavedChanges';
 import type { CaseKind, FieldSchemaDTO } from '../domain/types';
 import { ApiError } from '../services/HttpClient';
 import { appServices } from '../services/ServiceContainer';
@@ -17,6 +19,9 @@ export function CaseCreatePage({ kind, onNotify }: CaseCreatePageProps) {
   const [errors, setErrors] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  useUnsavedChanges(schema.some((field) => String(values[field.key] ?? '') !== String(field.value)));
 
   useEffect(() => {
     let active = true;
@@ -36,8 +41,9 @@ export function CaseCreatePage({ kind, onNotify }: CaseCreatePageProps) {
       })
       .catch((err) => {
         if (!active) return;
+        setLoadError(true);
         onNotify('error', err instanceof Error ? err.message : 'No fue posible cargar el formulario.');
-      });
+      }).finally(() => { if (active) setLoading(false); });
     return () => {
       active = false;
     };
@@ -55,7 +61,7 @@ export function CaseCreatePage({ kind, onNotify }: CaseCreatePageProps) {
     try {
       const { expediente, mensaje } = await appServices.expedientes.crearBorrador(kind, values);
       onNotify('success', mensaje);
-      appServices.navigation.navigate(`/expedientes/${expediente.id}`);
+      appServices.navigation.navigate(`/expedientes/${expediente.id}`, false, true);
     } catch (err) {
       if (err instanceof ApiError) {
         setErrors(err.errors);
@@ -67,6 +73,9 @@ export function CaseCreatePage({ kind, onNotify }: CaseCreatePageProps) {
       setSubmitting(false);
     }
   };
+
+  if (loading) return <section className="card padded" role="status">Cargando formulario…</section>;
+  if (loadError) return <LoadError />;
 
   return (
     <>

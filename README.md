@@ -1,29 +1,42 @@
 # Talento Humano · Contraloría Municipal de Pasto
 
-Aplicación local creada desde cero con **Django 6.0.4, SQLite y plantillas HTML/CSS/JavaScript**. Contiene tres módulos conectados a persistencia real: incapacidades y recobro, viáticos y gastos de viaje, y un prototipo de gestión de compensatorios.
+Aplicación de Talento Humano con **Django 6.0.4, SQLite y React/TypeScript/Vite**. Incluye incapacidades y recobro, viáticos, vacaciones, compensatorios y hojas de vida. La interfaz principal está en `Front_Contraloria`; Django conserva una interfaz de plantillas para compatibilidad.
 
 Los flujos iniciales son propuestas técnicas basadas en el prompt recibido. **No se han recibido ni verificado las tres resoluciones oficiales ni el procedimiento oficial de compensatorios.** Los expedientes provisionales permiten probar el proceso, pero no obtener un cierre institucional ni reconocer o descontar tiempo. La autoridad puede registrar una versión confirmada tras revisar sus fuentes; se aplica a expedientes nuevos.
 
 ## Ejecutar
 
-Requiere Python 3.12 o posterior. Desde esta carpeta:
+En Windows necesita Python 3.12 o posterior y Node.js 22.12 o posterior (validado con Python 3.14 y Node.js 24). Ejecute los dos servidores en terminales separadas. No necesita activar el entorno virtual ni cambiar la política de PowerShell.
 
-```sh
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver 127.0.0.1:8000
+Terminal 1, backend:
+
+```powershell
+cd "C:\Users\isamu\Desktop\Contraloria\ContraloriaApp"
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe manage.py migrate
+.\.venv\Scripts\python.exe manage.py cargar_festivos 2026 2027
+.\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
 ```
 
-Abra **http://127.0.0.1:8000/**. Si Django ya está instalado, puede ejecutar `./iniciar.command`; también puede abrir ese archivo desde Finder en macOS. El lanzador ejecuta las migraciones antes de iniciar.
+La creación de `.venv` y la instalación son necesarias solo la primera vez o al preparar otro equipo. No recree el entorno mientras el servidor esté ejecutándose. Cargue también los festivos de años adicionales cuando vaya a programarlos.
 
-La primera visita muestra la configuración del administrador. **No hay usuarios, expedientes, tarifas ni contraseñas predefinidas.** Cree su usuario con una contraseña de al menos 12 caracteres. El alta web inicial solo se permite desde la máquina local y está deshabilitada en producción.
+Terminal 2, interfaz principal:
+
+```powershell
+cd "C:\Users\isamu\Desktop\Contraloria\ContraloriaApp\Front_Contraloria"
+npm ci
+npm run dev
+```
+
+Abra **http://localhost:5173/**. Mantenga ambas terminales abiertas. El proxy de Vite envía API, documentos y exportaciones a Django. Use siempre ese mismo dominio para conservar la sesión. El puerto 8000 corresponde al backend y su interfaz anterior. En macOS puede seguir usando `iniciar.command` para iniciar solo Django.
+
+En una base vacía, la primera visita muestra la configuración del administrador. **No se insertan datos ni contraseñas de demostración al iniciar.** Cree su usuario con una contraseña de al menos 12 caracteres. El alta web inicial solo se permite desde la máquina local y está deshabilitada en producción. Si la base ya tiene usuarios, use su cuenta existente. El cierre de sesión está en la cabecera y el cambio de contraseña está al pie del menú.
 
 Como alternativa para crear el primer administrador:
 
 ```sh
-python manage.py bootstrap
+.\.venv\Scripts\python.exe manage.py bootstrap
 ```
 
 ## Primer recorrido
@@ -78,6 +91,19 @@ python manage.py test tests --noinput
 La suite usa una base de datos aislada que se elimina al finalizar. Los usuarios, documentos, fuentes y tarifas de prueba **no se insertan en la base de uso**. Incluye recorridos completos por servicios y formularios HTTP, devoluciones, permisos, documentos privados, conciliaciones, saldos, escalas, presupuestos, CSRF, concurrencia, exportación y autenticación.
 
 Consulte los resultados y límites de verificación en [la entrega](docs/entrega.md).
+
+Para compilar y verificar la interfaz, desde `Front_Contraloria`:
+
+```powershell
+npm run build
+npm run lint
+npx playwright install chromium
+npm run test:e2e
+```
+
+Las pruebas de navegador inician servidores en los puertos 8011 y 5177 y crean una base temporal independiente; no usan `var/` ni `var-demo/`. `npm run preview` permite revisar la compilación con el backend iniciado; no es un servidor de producción.
+
+Consulte los cambios y sus límites en [la revisión de la aplicación](docs/revision-aplicacion.md).
 
 ## Persistencia y respaldo
 

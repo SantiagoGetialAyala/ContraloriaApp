@@ -22,7 +22,7 @@ export class FormateadorTexto {
 
   public static fechaCorta(iso: string | null | undefined): string {
     if (!iso) return '—';
-    const d = new Date(iso);
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00` : iso);
     if (Number.isNaN(d.getTime())) return iso;
     return d.toLocaleDateString('es-CO', {
       day: '2-digit',
@@ -91,11 +91,5 @@ export class CalculadoraTramite {
    * Determina la entidad responsable del pago según la duración de la incapacidad
    * (Resolución 067/2025 y Art. 2.2.3.4.3 DUR 780/2016).
    */
-  public static determinarResponsablePagoIncapacidad(dias: number): string {
-    if (dias <= 2) {
-      return `Incapacidad de ${dias} día${dias === 1 ? '' : 's'}: el pago corresponde al 100% a la Contraloría Municipal de Pasto.`;
-    }
-    return `Incapacidad de ${dias} días: los primeros 2 días los asume la Contraloría y a partir del día 3 el subsidio corresponde a la EPS (procede trámite de recobro).`;
-  }
 }
 

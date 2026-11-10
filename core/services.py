@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from django.utils.text import get_valid_filename
-from .models import Case, CompensatoryLedgerEntry, Dependencia, Document, Event, FinancialEntry, PolicyVersion, TravelScale, VacationLedgerEntry, VacationPeriod
+from .models import EMPLOYEE_DOC_CATEGORIES, Case, CompensatoryLedgerEntry, Dependencia, Document, EmployeeDocument, Event, FinancialEntry, PolicyVersion, TravelScale, VacationLedgerEntry, VacationPeriod
 from .forms import BASE_FIELDS
 from .workflows import FIELDS, DOCS, WORKFLOWS, workflow, current_step, editable_step, actor_for, actor_for_transition, transition_rule, role_names
 from . import vacations
@@ -31,7 +31,13 @@ def amount(data, key):
 
 
 def totals(case):
-    sums = {row['kind']: row['total'] for row in case.financial_entries.values('kind').annotate(total=Sum('amount'))}
+    prefetched = getattr(case, '_prefetched_objects_cache', {}).get('financial_entries')
+    if prefetched is not None:
+        sums = {}
+        for entry in prefetched:
+            sums[entry.kind] = sums.get(entry.kind, ZERO) + entry.amount
+    else:
+        sums = {row['kind']: row['total'] for row in case.financial_entries.values('kind').annotate(total=Sum('amount'))}
     requested = amount(case.data, 'requested')
     recognized = amount(case.data, 'recognized')
     recovered = sums.get('recuperacion', ZERO)
@@ -39,7 +45,9 @@ def totals(case):
     returned = sums.get('reintegro', ZERO)
     executed = amount(case.data, 'executed')
     authorized = amount(case.data, 'authorized_total')
-    return {'requested': requested, 'recognized': recognized, 'recovered': recovered, 'pending': requested - recovered, 'difference': requested - recognized, 'paid': paid, 'returned': returned, 'executed': executed, 'authorized': authorized, 'travel_balance': paid - executed - returned, 'committed': amount(case.data, 'rp_amount') if case.events.filter(action='Etapa completada', before='rp').exists() else ZERO}
+    events = getattr(case, 'workflow_events', None)
+    committed = any(event.action == 'Etapa completada' and event.before == 'rp' for event in events) if events is not None else case.events.filter(action='Etapa completada', before='rp').exists()
+    return {'requested': requested, 'recognized': recognized, 'recovered': recovered, 'pending': requested - recovered, 'difference': requested - recognized, 'paid': paid, 'returned': returned, 'executed': executed, 'authorized': authorized, 'travel_balance': paid - executed - returned, 'committed': amount(case.data, 'rp_amount') if committed else ZERO}
 
 
 def compensatory_balance(user):
@@ -590,7 +598,7 @@ def apply_profile(profile, data):
     dependencia = Dependencia.objects.filter(name__iexact=name).first() or Dependencia.objects.create(name=name)
     profile.department = dependencia.name
     profile.dependencia = dependencia
-    for key in ['employment', 'cargo', 'codigo', 'grado']:
+    for key in ['employment', 'cargo', 'codigo', 'grado', 'phone', 'institutional_email', 'profession', 'bio']:
         if key in data:
             setattr(profile, key, data[key] or '')
     if 'hire_date' in data:
@@ -605,3 +613,61 @@ def apply_profile(profile, data):
         dependencia.jefe = None
         dependencia.save(update_fields=['jefe'])
     return profile
+
+
+@transaction.atomic
+def upload_employee_document(actor, employee, category, file, title='', notes=''):
+    """Valida e incorpora una hoja de vida o soporte documental al expediente personal de un usuario."""
+    from .access import require_personnel_manager
+    require_personnel_manager(actor)
+    valid_categories = dict(EMPLOYEE_DOC_CATEGORIES)
+    if category not in valid_categories:
+        raise ValidationError('La categoría del documento no es válida.')
+    if not file:
+        raise ValidationError('Debe seleccionar un archivo para subir.')
+    max_bytes = 10 * 1024 * 1024
+    if not 0 < file.size <= max_bytes:
+        raise ValidationError('El archivo debe tener entre 1 byte y 10 MB.')
+    content = file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise ValidationError('El archivo supera los 10 MB.')
+    ext = os.path.splitext(file.name)[1].lower()
+    if content.startswith(b'%PDF-') and ext == '.pdf':
+        content_type = 'application/pdf'
+    elif content.startswith(b'\x89PNG\r\n\x1a\n') and ext == '.png':
+        content_type = 'image/png'
+    elif content.startswith(b'\xff\xd8\xff') and ext in {'.jpg', '.jpeg'}:
+        content_type = 'image/jpeg'
+    elif content.startswith(b'PK\x03\x04') and ext == '.docx':
+        content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    elif content.startswith(b'\xd0\xcf\x11\xe0') and ext == '.doc':
+        content_type = 'application/msword'
+    else:
+        raise ValidationError('Solo se permiten archivos PDF, PNG, JPG, DOC o DOCX válidos.')
+    name = get_valid_filename(os.path.basename(file.name))[:190]
+    digest = hashlib.sha256(content).hexdigest()
+    clean_title = (title or '').strip()[:200] or valid_categories[category]
+    clean_notes = (notes or '').strip()[:2000]
+    doc = EmployeeDocument.objects.create(
+        employee=employee,
+        category=category,
+        title=clean_title,
+        notes=clean_notes,
+        name=name,
+        content_type=content_type,
+        content=content,
+        sha256=digest,
+        size=len(content),
+        uploaded_by=actor,
+    )
+    audit(
+        None,
+        actor,
+        'Documento de hoja de vida cargado',
+        note=clean_title,
+        employee_id=employee.pk,
+        document_id=doc.pk,
+        category=category,
+        sha256=digest,
+    )
+    return doc

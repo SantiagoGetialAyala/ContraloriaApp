@@ -213,6 +213,7 @@ export interface CaseDetailDTO extends CaseSummaryDTO {
   ledger_entries: LedgerEntryDTO[];
   vacation: VacationDetailDTO | null;
   events: {
+    total: number;
     page: number;
     num_pages: number;
     has_previous: boolean;
@@ -298,6 +299,8 @@ export interface ProceduresDTO {
   modules: Array<{
     kind: CaseKind;
     title: string;
+    confirmed: boolean;
+    version: number | null;
     stages: Array<{
       number: number;
       key: string;
@@ -435,4 +438,62 @@ export interface AuditLogDTO {
     case_reference: string;
     result: string;
   }>;
+}
+
+export interface EmployeeDocumentDTO {
+  id: number;
+  category: string;
+  category_label: string;
+  title: string;
+  notes: string;
+  name: string;
+  content_type: string;
+  size: number;
+  sha256: string;
+  uploaded_by: string;
+  created_at: string;
+  preview_url: string;
+  download_url: string;
+}
+
+export interface PersonHojaDeVidaDTO {
+  id: number;
+  username: string;
+  full_name: string;
+  department: string;
+  employment: string;
+  employment_display: string;
+  cedula: string;
+  cargo: string;
+  codigo: string;
+  grado: string;
+  hire_date: string;
+  phone: string;
+  institutional_email: string;
+  profession: string;
+  bio: string;
+  is_jefe: boolean;
+  is_active: boolean;
+  roles: string[];
+  role_labels: string[];
+  hoja_vida_count: number;
+  documents_count: number;
+  latest_hoja_vida: EmployeeDocumentDTO | null;
+}
+
+export interface HojasDeVidaDirectoryDTO {
+  people: PersonHojaDeVidaDTO[];
+  dependencias: string[];
+  available_roles: Array<[string, string]>;
+  employments: Array<[string, string]>;
+  document_categories: Array<[string, string]>;
+}
+
+export interface HojaDeVidaDetailDTO {
+  person: PersonHojaDeVidaDTO;
+  documents: EmployeeDocumentDTO[];
+  dependencias: string[];
+  available_roles: Array<[string, string]>;
+  employments: Array<[string, string]>;
+  document_categories: Array<[string, string]>;
 }

@@ -1,3 +1,4 @@
+import { LoadError } from '../components/LoadError';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AppLink } from '../components/AppLink';
 import { FormateadorTexto } from '../domain/Formatters';
@@ -26,10 +27,11 @@ export function CaseListPage({ kind, onNotify }: CaseListPageProps) {
   const [state, setState] = useState('');
   const [from, setFrom] = useState('');
   const [until, setUntil] = useState('');
-  const [page, setPage] = useState(1);
+
 
   const cargar = useCallback(
     async (targetKind: CaseKind, filtros: Record<string, string>) => {
+      setLoading(true);
       try {
         const res = await appServices.expedientes.listarPorModulo(targetKind, filtros);
         setVm(res);
@@ -64,7 +66,6 @@ export function CaseListPage({ kind, onNotify }: CaseListPageProps) {
 
   const handleFilterSubmit = (e: FormEvent) => {
     e.preventDefault();
-    setPage(1);
     void cargar(kind, { q, state, from, until, page: '1' });
   };
 
@@ -73,12 +74,10 @@ export function CaseListPage({ kind, onNotify }: CaseListPageProps) {
     setState('');
     setFrom('');
     setUntil('');
-    setPage(1);
     void cargar(kind, {});
   };
 
   const handlePageChange = (newPage: number) => {
-    setPage(newPage);
     void cargar(kind, { q, state, from, until, page: String(newPage) });
   };
 
@@ -90,7 +89,7 @@ export function CaseListPage({ kind, onNotify }: CaseListPageProps) {
     );
   }
 
-  if (!vm) return null;
+  if (!vm) return <LoadError />;
 
   const { dto, expedientes } = vm;
   const hasFilters = Boolean(q || state || from || until);
@@ -176,8 +175,8 @@ export function CaseListPage({ kind, onNotify }: CaseListPageProps) {
               onChange={(e) => setUntil(e.target.value)}
             />
           </div>
-          <button className="btn secondary" type="submit">
-            Filtrar
+          <button className="btn secondary" type="submit" disabled={loading}>
+            {loading ? 'Filtrando?' : 'Filtrar'}
           </button>
           <button
             type="button"
@@ -206,7 +205,7 @@ export function CaseListPage({ kind, onNotify }: CaseListPageProps) {
                   <th>Expediente / fecha</th>
                   <th>Solicitante</th>
                   <th>Periodo</th>
-                  <th>Etapa y avance</th>
+                  <th>Etapa actual</th>
                   <th>Seguimiento</th>
                   <th></th>
                 </tr>
@@ -232,12 +231,7 @@ export function CaseListPage({ kind, onNotify }: CaseListPageProps) {
                       </td>
                       <td>
                         <span className={exp.getBadgeEstadoClass()}>{exp.stageLabel}</span>
-                        <progress
-                          className="mini-progress"
-                          value={exp.progress}
-                          max={100}
-                          aria-label={`Avance: ${exp.progress} por ciento`}
-                        ></progress>
+
                       </td>
                       <td>
                         {exp.overdue ? (
@@ -280,14 +274,15 @@ export function CaseListPage({ kind, onNotify }: CaseListPageProps) {
 
         <div className="pagination">
           <span>
-            Página {page} de {dto.num_pages}
+            Página {dto.page} de {dto.num_pages}
           </span>
           <div>
             {dto.has_previous && (
               <button
                 type="button"
                 className="btn secondary"
-                onClick={() => handlePageChange(page - 1)}
+                disabled={loading}
+                onClick={() => handlePageChange(dto.page - 1)}
               >
                 ← Anterior
               </button>
@@ -296,7 +291,8 @@ export function CaseListPage({ kind, onNotify }: CaseListPageProps) {
               <button
                 type="button"
                 className="btn secondary"
-                onClick={() => handlePageChange(page + 1)}
+                disabled={loading}
+                onClick={() => handlePageChange(dto.page + 1)}
               >
                 Siguiente →
               </button>

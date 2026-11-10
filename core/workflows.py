@@ -28,7 +28,7 @@ FIELDS = {
     'resolution_radication': ('Número de radicado de la resolución', 'text'),
     'resolution_date': ('Fecha de resolución', 'date'),
     'archive_reference': ('Referencia de incorporación al expediente', 'text'),
-    'payer_entity': ('Entidad responsable del pago', 'choice', [('contraloria', 'Contraloría Municipal de Pasto (hasta 2 días - 100% Entidad)'), ('eps', 'Entidad Promotora de Salud - EPS (a partir del día 3 - subsidio EPS)')]),
+    'payer_entity': ('Entidad responsable del pago', 'choice', [('contraloria', 'Contraloría Municipal de Pasto'), ('eps', 'Entidad Promotora de Salud - EPS')]),
     'employee_paid': ('Valor pagado al funcionario (COP)', 'money'),
     'employee_paid_on': ('Fecha de pago al funcionario', 'pastdate'),
     'employee_payment_ref': ('Referencia de pago al funcionario', 'text'),
@@ -181,6 +181,35 @@ def correction_step(case):
 
 def editable_step(case):
     return correction_step(case) if case.stage == 'correccion' else current_step(case)
+
+
+def completed_stage_keys(case):
+    """Etapas acreditadas por actuaciones; una devolución invalida la etapa a corregir."""
+    keys = [step['key'] for step in workflow(case)]
+    events = getattr(case, 'workflow_events', None)
+    if events is None:
+        events = case.events.filter(action__in=[
+            'Etapa completada', 'Devuelto para corrección', 'Movimiento financiero registrado',
+        ]).order_by('created_at', 'id').only('action', 'before', 'after')
+    completed = set()
+    for event in events:
+        if event.action == 'Etapa completada':
+            key = event.before
+            if key == 'correccion' and event.after in keys:
+                key = keys[max(keys.index(event.after) - 1, 0)]
+            if key in keys:
+                completed.add(key)
+        elif event.action == 'Devuelto para corrección' and event.before in keys:
+            completed.difference_update(keys[max(keys.index(event.before) - 1, 0):])
+        elif event.before != event.after and event.after in keys:
+            completed.difference_update(keys[keys.index(event.after):])
+    return completed
+
+
+def state_display(case, key):
+    labels = {step['key']: step['label'] for step in workflow(case)}
+    labels.update({'cerrado': 'Cerrado', 'rechazado': 'Rechazado', 'correccion': 'En corrección'})
+    return labels.get(key, key)
 
 
 def role_names(user):

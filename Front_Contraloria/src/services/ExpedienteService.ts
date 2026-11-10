@@ -27,6 +27,9 @@ export interface CaseListViewModel {
  * flujos de trabajo, documentos y movimientos financieros.
  */
 export class ExpedienteService extends BaseApiService {
+  public async calcularFechasVacaciones(start: string, days: number): Promise<{ end: string; return_date: string }> {
+    return this.http.get('/api/vacaciones/preview/', { start, days: String(days) });
+  }
   public async obtenerDashboard(filtros: Record<string, string> = {}): Promise<DashboardViewModel> {
     const dto = await this.http.get<DashboardDTO>('/api/dashboard/', filtros);
     return {
@@ -72,10 +75,11 @@ export class ExpedienteService extends BaseApiService {
   public async obtenerDetalle(
     caseId: string,
     historyPage = 1,
+    includeAccess = false,
   ): Promise<ExpedienteBase> {
     const dto = await this.http.get<CaseDetailDTO>(
       `/api/cases/detail/${caseId}/`,
-      historyPage > 1 ? { history_page: String(historyPage) } : {},
+      { history_page: String(historyPage), ...(includeAccess ? { history: 'all' } : {}) },
     );
     return ExpedienteFactory.crear(dto);
   }

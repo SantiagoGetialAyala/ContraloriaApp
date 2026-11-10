@@ -18,7 +18,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST, require_http_methods
-from .models import Case, CompensatoryLedgerEntry, Document, Event, Profile, PolicyVersion, TravelScale, LoginAttempt, ROLES
+from .models import Case, CompensatoryLedgerEntry, Document, EmployeeDocument, Event, Profile, PolicyVersion, TravelScale, LoginAttempt, ROLES
 from .forms import RecognitionForm, CaseDataForm, UploadForm, PaymentForm, DecisionForm, SetupForm, UserForm, UserAccessForm, ScaleForm, PolicyForm, VacationInterruptionForm, BASE_FIELDS
 from .workflows import workflow, current_step, editable_step, stage_label, actor_for, actor_for_transition, role_names, WORKFLOWS, DOCS, FIELDS, RELATIONAL_ROLES
 from .access import visible_cases, get_case, can_document, require_role
@@ -122,11 +122,11 @@ def password_change(request):
 
 
 def decorate(case):
+    from .workflows import completed_stage_keys
     case.stage_label = stage_label(case)
     steps = workflow(case)
     case.step = editable_step(case)
-    index = next((i for i, s in enumerate(steps) if case.step and s['key'] == case.step['key']), len(steps))
-    case.progress = 100 if case.stage == 'cerrado' else round(index / len(steps) * 100)
+    case.progress = round(len(completed_stage_keys(case)) / len(steps) * 100) if steps else 0
     case.overdue = bool(case.due_at and case.due_at < timezone.now() and case.stage not in services.TERMINAL)
     return case
 
@@ -259,6 +259,7 @@ def case_create(request, kind):
 
 
 def detail_context(request, case, **extra):
+    from .workflows import completed_stage_keys, state_display
     decorate(case)
     step = editable_step(case)
     if step:
@@ -272,12 +273,13 @@ def detail_context(request, case, **extra):
     initial = {'revision': case.revision}
     steps = workflow(case)
     index = next((i for i, s in enumerate(steps) if step and s['key'] == step['key']), len(steps))
+    completed = completed_stage_keys(case)
     for i, s in enumerate(steps):
-        s['done'] = i < index or case.stage == 'cerrado'
+        s['done'] = s['key'] in completed
         s['current'] = i == index and case.stage not in services.TERMINAL
         s['role_labels'] = [ROLE_LABELS.get(r, r) for r in s['roles']]
     roles = role_names(request.user)
-    full = case.owner_id == request.user.pk or bool(roles & {'talento', 'juridica', 'secretaria', 'autoridad', 'control'})
+    full = case.owner_id == request.user.pk or ('talento' in roles if case.kind == 'incapacidad' else bool(roles & {'talento', 'juridica', 'secretaria', 'autoridad', 'control'}))
     financial_keys = {'start_date', 'end_date', 'days', 'incapacity_number', 'radication_number', 'epicrisis_radication', 'resolution_number', 'resolution_radication', 'resolution_date', 'payer_entity', 'requested', 'recognized', 'employee_paid', 'employee_paid_on', 'employee_payment_ref', 'finance_notice', 'accounting_reference', 'reconciliation_note', 'balance_note', 'closure_note'}
     values = []
     for k, v in case.data.items():
@@ -290,7 +292,12 @@ def detail_context(request, case, **extra):
             v = 'Sí' if v else 'No'
         values.append({'label': definition[0], 'value': v})
     events = case.events.select_related('actor').order_by('-created_at', '-id')
+    if request.GET.get('history') != 'all':
+        events = events.exclude(action__in=['Expediente consultado', 'Documento visualizado', 'Documento descargado', 'Acceso documental rechazado', 'Operación rechazada'])
     event_page = Paginator(events, 30).get_page(request.GET.get('history_page'))
+    for event in event_page.object_list:
+        event.before_label = state_display(case, event.before)
+        event.after_label = state_display(case, event.after)
     extra.setdefault('vacation', vacation_context(request, case, initial) if case.kind == 'vacaciones' else None)
     return {'case': case, 'title': case.reference, 'step': step, 'steps': steps, 'can_edit': can_edit, 'can_return': can_edit and case.stage not in {'borrador', 'correccion'} and step and 'owner' not in step['roles'], 'full_access': full, 'data_form': CaseDataForm(keys=keys, initial_data=case.data, initial=initial), 'upload_form': UploadForm(categories=categories, initial=initial) if categories else None, 'decision_form': DecisionForm(initial=initial), 'payment_form': PaymentForm(case=case, initial=initial) if services.treasury_allowed(request.user, case) else None, 'documents': documents, 'events': event_page, 'values': values, 'totals': services.totals(case), 'compensatory': services.compensatory_summary(case) if case.kind == 'compensatorio' else None, 'ledger_entries': case.owner.compensatory_ledger.select_related('case', 'actor') if case.kind == 'compensatorio' else [], 'can_recognize': case.kind == 'incapacidad' and 'talento' in roles and case.stage in {'transcripcion', 'comprobante'}, 'recognition_documents': case.documents.filter(category='reconocimiento').defer('content'), 'required_documents': [DOCS[d] for d in step['docs']] if step else [], **extra}
 
@@ -356,7 +363,38 @@ def document_download(request, document_id, preview=False):
     services.audit(case, request.user, 'Documento visualizado' if preview else 'Documento descargado', document_id=document.pk, sha256=document.sha256)
     response = FileResponse(BytesIO(bytes(document.content)), as_attachment=not preview, filename=document.name, content_type=document.content_type)
     if preview:
-        response['Content-Security-Policy'] = "default-src 'none'; sandbox"
+        response['Content-Security-Policy'] = (
+            "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'self'"
+        )
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+    return response
+
+
+@login_required
+def employee_document_download(request, document_id, preview=False):
+    document = get_object_or_404(EmployeeDocument.objects.select_related('employee'), pk=document_id)
+    from .access import require_personnel_manager
+    if request.user.pk != document.employee_id:
+        require_personnel_manager(request.user)
+    services.audit(
+        None,
+        request.user,
+        'Documento de hoja de vida visualizado' if preview else 'Documento de hoja de vida descargado',
+        employee_id=document.employee_id,
+        document_id=document.pk,
+        sha256=document.sha256,
+    )
+    response = FileResponse(
+        BytesIO(bytes(document.content)),
+        as_attachment=not preview,
+        filename=document.name,
+        content_type=document.content_type,
+    )
+    if preview:
+        response['Content-Security-Policy'] = (
+            "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'self'"
+        )
+        response['X-Frame-Options'] = 'SAMEORIGIN'
     return response
 
 

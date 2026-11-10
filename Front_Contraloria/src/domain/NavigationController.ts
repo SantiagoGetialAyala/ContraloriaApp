@@ -14,6 +14,8 @@ export type RouteMatch =
   | { name: 'configuration' }
   | { name: 'users' }
   | { name: 'user_access'; userId: number }
+  | { name: 'hojas_de_vida' }
+  | { name: 'hoja_de_vida_detail'; userId: number }
   | { name: 'audit' }
   | { name: 'not_found' };
 
@@ -34,14 +36,19 @@ export class NavigationController {
     }
   }
 
-  public navigate(path: string, replace = false): void {
+  public canNavigate(): boolean {
+    return window.dispatchEvent(new Event('talento:before-navigate', { cancelable: true }));
+  }
+
+  public navigate(path: string, replace = false, force = false): void {
     if (typeof window === 'undefined') return;
+    if (!force && !this.canNavigate()) return;
     if (replace) {
       window.history.replaceState({}, '', path);
     } else {
       window.history.pushState({}, '', path);
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'instant' });
     this.notificar();
   }
 
@@ -90,6 +97,12 @@ export class NavigationController {
     if (clean === '/parametros') return { name: 'configuration' };
     if (clean === '/administracion/usuarios') return { name: 'users' };
     if (clean === '/administracion/auditoria') return { name: 'audit' };
+    if (clean === '/hojas-de-vida') return { name: 'hojas_de_vida' };
+
+    const hojaDeVidaMatch = clean.match(/^\/hojas-de-vida\/(\d+)$/);
+    if (hojaDeVidaMatch) {
+      return { name: 'hoja_de_vida_detail', userId: Number(hojaDeVidaMatch[1]) };
+    }
 
     const moduleCreateMatch = clean.match(/^\/modulos\/([^/]+)\/nuevo$/);
     if (moduleCreateMatch && this.isCaseKind(moduleCreateMatch[1])) {

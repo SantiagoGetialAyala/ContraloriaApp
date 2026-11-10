@@ -1,8 +1,7 @@
 import { CalculadoraTramite, FormateadorTexto } from '../domain/Formatters';
-import { CalendarioLaboralColombia } from '../domain/PlanVacaciones';
+import { useEffect, useState } from 'react';
+import { appServices } from '../services/ServiceContainer';
 import type { CaseKind, FieldSchemaDTO } from '../domain/types';
-
-const calendarioColombia = new CalendarioLaboralColombia();
 
 interface DynamicFieldsProps {
   schema: FieldSchemaDTO[];
@@ -39,14 +38,20 @@ export function DynamicFields({
     businessDaysVal >= 1 &&
     businessDaysVal <= 15 &&
     schema.some((f) => f.key === 'business_days');
-  const startIsBusinessDay =
-    showVacationPreview &&
-    calendarioColombia.esDiaHabil(CalendarioLaboralColombia.parseISO(startDate));
-  const vacEndIso =
-    showVacationPreview && startIsBusinessDay
-      ? calendarioColombia.calcularFechaFinHabil(startDate, businessDaysVal)
-      : '';
-  const vacReturnIso = vacEndIso ? calendarioColombia.calcularSiguienteDiaHabil(vacEndIso) : '';
+  const previewKey = `${startDate}:${businessDaysVal}`;
+  const [previewResult, setPreviewResult] = useState<{ key: string; data: { end: string; return_date: string } | null; error: string } | null>(null);
+  const preview = previewResult?.key === previewKey ? previewResult.data : null;
+  const previewError = previewResult?.key === previewKey ? previewResult.error : '';
+  useEffect(() => {
+    let active = true;
+    if (!showVacationPreview) return;
+    const timer = window.setTimeout(() => {
+      appServices.expedientes.calcularFechasVacaciones(startDate, businessDaysVal)
+        .then((result) => { if (active) setPreviewResult({ key: previewKey, data: result, error: '' }); })
+        .catch((error) => { if (active) setPreviewResult({ key: previewKey, data: null, error: error instanceof Error ? error.message : 'No se pudieron calcular las fechas.' }); });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [showVacationPreview, startDate, businessDaysVal, previewKey]);
 
   return (
     <>
@@ -61,6 +66,9 @@ export function DynamicFields({
               <label htmlFor={id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input
                   id={id}
+                    name={field.key}
+                    aria-invalid={errors.length > 0}
+                    aria-describedby={errors.length ? `${id}-errors` : undefined}
                   type="checkbox"
                   checked={Boolean(rawVal)}
                   onChange={(e) => onChange(field.key, e.target.checked)}
@@ -73,6 +81,9 @@ export function DynamicFields({
                 {field.type === 'textarea' ? (
                   <textarea
                     id={id}
+                    name={field.key}
+                    aria-invalid={errors.length > 0}
+                    aria-describedby={errors.length ? `${id}-errors` : undefined}
                     rows={3}
                     value={String(rawVal ?? '')}
                     onChange={(e) => onChange(field.key, e.target.value)}
@@ -80,6 +91,9 @@ export function DynamicFields({
                 ) : field.type === 'choice' || field.type === 'scale' ? (
                   <select
                     id={id}
+                    name={field.key}
+                    aria-invalid={errors.length > 0}
+                    aria-describedby={errors.length ? `${id}-errors` : undefined}
                     value={String(rawVal ?? '')}
                     onChange={(e) => onChange(field.key, e.target.value)}
                   >
@@ -93,6 +107,9 @@ export function DynamicFields({
                 ) : field.type === 'date' || field.type === 'pastdate' ? (
                   <input
                     id={id}
+                    name={field.key}
+                    aria-invalid={errors.length > 0}
+                    aria-describedby={errors.length ? `${id}-errors` : undefined}
                     type="date"
                     value={String(rawVal ?? '')}
                     onChange={(e) => onChange(field.key, e.target.value)}
@@ -100,6 +117,9 @@ export function DynamicFields({
                 ) : field.type === 'time' ? (
                   <input
                     id={id}
+                    name={field.key}
+                    aria-invalid={errors.length > 0}
+                    aria-describedby={errors.length ? `${id}-errors` : undefined}
                     type="time"
                     value={String(rawVal ?? '')}
                     onChange={(e) => onChange(field.key, e.target.value)}
@@ -107,6 +127,9 @@ export function DynamicFields({
                 ) : field.type === 'money' ? (
                   <input
                     id={id}
+                    name={field.key}
+                    aria-invalid={errors.length > 0}
+                    aria-describedby={errors.length ? `${id}-errors` : undefined}
                     type="number"
                     step="0.01"
                     min="0"
@@ -116,6 +139,9 @@ export function DynamicFields({
                 ) : field.type === 'int' ? (
                   <input
                     id={id}
+                    name={field.key}
+                    aria-invalid={errors.length > 0}
+                    aria-describedby={errors.length ? `${id}-errors` : undefined}
                     type="number"
                     step="1"
                     min="0"
@@ -125,6 +151,9 @@ export function DynamicFields({
                 ) : (
                   <input
                     id={id}
+                    name={field.key}
+                    aria-invalid={errors.length > 0}
+                    aria-describedby={errors.length ? `${id}-errors` : undefined}
                     type="text"
                     value={String(rawVal ?? '')}
                     onChange={(e) => onChange(field.key, e.target.value)}
@@ -134,7 +163,7 @@ export function DynamicFields({
             )}
 
             {errors.length > 0 && (
-              <ul className="errorlist" role="alert">
+              <ul id={`${id}-errors`} className="errorlist" role="alert">
                 {errors.map((err, idx) => (
                   <li key={idx}>{err}</li>
                 ))}
@@ -150,7 +179,7 @@ export function DynamicFields({
           <div>
             <strong>Duración calculada: {calculatedDays} día{calculatedDays === 1 ? '' : 's'} calendario</strong>
             {kind === 'incapacidad' && (
-              <p>{CalculadoraTramite.determinarResponsablePagoIncapacidad(calculatedDays)}</p>
+              <p>Registre la entidad pagadora y los valores verificados en la etapa correspondiente.</p>
             )}
           </div>
         </div>
@@ -170,24 +199,21 @@ export function DynamicFields({
         <div className="notice compact">
           <span className="notice-icon">☀</span>
           <div>
-            {startIsBusinessDay ? (
+            {preview ? (
               <>
                 <strong>
                   Disfrute estimado: del {FormateadorTexto.fechaCorta(startDate)} al{' '}
-                  {FormateadorTexto.fechaCorta(vacEndIso)} ({businessDaysVal} día
+                  {FormateadorTexto.fechaCorta(preview.end)} ({businessDaysVal} día
                   {businessDaysVal === 1 ? '' : 's'} hábiles)
                 </strong>
                 <p>
-                  Reintegro previsto: <strong>{FormateadorTexto.fechaCorta(vacReturnIso)}</strong>{' '}
-                  (descontando sábados, domingos y festivos de Colombia).
+                  Reintegro previsto: <strong>{FormateadorTexto.fechaCorta(preview.return_date)}</strong>{' '}
+                  según el calendario registrado en el sistema.
                 </p>
               </>
             ) : (
               <>
-                <strong>La fecha de inicio seleccionada no es un día hábil</strong>
-                <p>
-                  Las vacaciones deben iniciar en un día hábil (no sábado, domingo ni festivo).
-                </p>
+                <strong>{previewError || 'Calculando fechas con el calendario institucional…'}</strong>
               </>
             )}
           </div>

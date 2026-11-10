@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
+from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
@@ -17,7 +18,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
-from .access import can_document, get_case, require_role, visible_cases
+from .access import can_document, get_case, require_personnel_manager, require_role, visible_cases
 from .forms import (
     BASE_FIELDS,
     CaseDataForm,
@@ -33,11 +34,13 @@ from .forms import (
     VacationInterruptionForm,
 )
 from .models import (
+    EMPLOYEE_DOC_CATEGORIES,
     KINDS,
     ROLES,
     Case,
     CompensatoryLedgerEntry,
     Dependencia,
+    EmployeeDocument,
     Event,
     Holiday,
     LoginAttempt,
@@ -53,9 +56,11 @@ from .workflows import (
     WORKFLOWS,
     actor_for,
     actor_for_transition,
+    completed_stage_keys,
     editable_step,
     role_names,
     stage_label,
+    state_display,
     workflow,
 )
 
@@ -114,7 +119,7 @@ class CaseSerializer:
         return {k: str(v) for k, v in raw.items()}
 
     @classmethod
-    def serialize_summary(cls, case):
+    def serialize_summary(cls, case, user=None):
         decorate(case)
         employment = ''
         cedula = ''
@@ -157,14 +162,20 @@ class CaseSerializer:
             'policy_confirmed': case.policy.confirmed,
             'created_at': case.created_at.isoformat(),
             'updated_at': case.updated_at.isoformat(),
-            'data': case.data,
+            'data': cls.visible_data(case, user),
             'totals': cls.serialize_totals(case),
             'compensatory': services.compensatory_summary(case) if case.kind == 'compensatorio' else None,
         }
 
     @classmethod
+    def visible_data(cls, case, user):
+        if case.kind == 'incapacidad' and user and case.owner_id != user.pk and 'talento' not in role_names(user):
+            return {key: value for key, value in case.data.items() if key in cls.FINANCIAL_KEYS}
+        return case.data
+
+    @classmethod
     def serialize_detail(cls, request, case):
-        summary = cls.serialize_summary(case)
+        summary = cls.serialize_summary(case, request.user)
         user = request.user
         step = editable_step(case)
         if step:
@@ -172,19 +183,19 @@ class CaseSerializer:
         can_edit = actor_for(user, case) or actor_for_transition(user, case)
         keys = BASE_FIELDS[case.kind] if step and step['key'] == 'borrador' else (step['fields'] if step else [])
         steps = workflow(case)
-        index = next((i for i, s in enumerate(steps) if step and s['key'] == step['key']), len(steps))
+        completed = completed_stage_keys(case)
         serialized_steps = []
         for i, s in enumerate(steps):
             serialized_steps.append({
                 'key': s['key'],
                 'label': s['label'],
-                'done': i < index or case.stage == 'cerrado',
-                'current': i == index and case.stage not in services.TERMINAL,
+                'done': s['key'] in completed,
+                'current': bool(step and s['key'] == step['key'] and case.stage not in services.TERMINAL),
                 'role_labels': [ROLE_LABELS.get(r, r) for r in s['roles']],
             })
 
         roles = role_names(user)
-        full = case.owner_id == user.pk or bool(roles & {'talento', 'juridica', 'secretaria', 'autoridad', 'control'})
+        full = case.owner_id == user.pk or ('talento' in roles if case.kind == 'incapacidad' else bool(roles & {'talento', 'juridica', 'secretaria', 'autoridad', 'control'}))
         values = []
         for k, v in case.data.items():
             if k not in FIELDS or (not full and case.kind == 'incapacidad' and k not in cls.FINANCIAL_KEYS) or v == '' or v is None:
@@ -317,20 +328,26 @@ class CaseSerializer:
             }
 
         events_qs = case.events.select_related('actor').order_by('-created_at', '-id')
+        if request.GET.get('history') != 'all':
+            events_qs = events_qs.exclude(action__in=[
+                'Expediente consultado', 'Documento visualizado', 'Documento descargado',
+                'Acceso documental rechazado', 'Operación rechazada',
+            ])
         event_page = Paginator(events_qs, 30).get_page(request.GET.get('history_page'))
         events_data = {
             'page': event_page.number,
             'num_pages': event_page.paginator.num_pages,
             'has_previous': event_page.has_previous(),
             'has_next': event_page.has_next(),
+            'total': event_page.paginator.count,
             'items': [
                 {
                     'id': e.pk,
                     'action': e.action,
                     'actor': (e.actor.get_full_name() or e.actor.username) if e.actor else 'Acceso sin autenticar',
                     'created_at': e.created_at.isoformat(),
-                    'before': e.before,
-                    'after': e.after,
+                    'before': state_display(case, e.before),
+                    'after': state_display(case, e.after),
                     'note': e.note if full else '',
                     'details': e.details if full else None,
                 }
@@ -372,8 +389,11 @@ class BaseApiView(View):
     def parse_body(self, request):
         if request.content_type and 'application/json' in request.content_type:
             try:
-                return json.loads(request.body.decode('utf-8') or '{}')
-            except json.JSONDecodeError:
+                body = json.loads(request.body.decode('utf-8') or '{}')
+                if not isinstance(body, dict):
+                    raise ValidationError('El cuerpo JSON debe ser un objeto.')
+                return body
+            except (json.JSONDecodeError, UnicodeDecodeError):
                 raise ValidationError('El cuerpo JSON de la solicitud no es válido.')
         return request.POST.dict()
 
@@ -658,7 +678,7 @@ class DashboardApiView(BaseApiView):
                 stats['committed'] += money['committed']
                 stats['executed'] += money['executed']
                 stats['payments'] += money['paid']
-                if case.events.filter(action='Etapa completada', before='autorizacion').exists():
+                if any(event.action == 'Etapa completada' and event.before == 'autorizacion' for event in case.workflow_events):
                     stats['approved_trips'] += 1
                 if case.stage in {'comision', 'legalizacion', 'revision_legalizacion', 'conciliacion'}:
                     stats['legalizations'] += 1
@@ -669,7 +689,8 @@ class DashboardApiView(BaseApiView):
                     stats['comp_authorized'] += 1
 
         stats['comp_balance'] = services.compensatory_balance(request.user)['balance']
-        provisional = PolicyVersion.objects.filter(confirmed=False).exists() or not PolicyVersion.objects.exists()
+        latest_policies = {policy.kind: policy for policy in PolicyVersion.objects.order_by('kind', 'version')}
+        provisional = any(kind not in latest_policies or not latest_policies[kind].confirmed for kind in WORKFLOWS)
         serialized_stats = {k: str(v) if isinstance(v, Decimal) else v for k, v in stats.items()}
         return self.json_success({
             'today': timezone.localdate().isoformat(),
@@ -677,8 +698,8 @@ class DashboardApiView(BaseApiView):
             'task_count': len(tasks),
             'stats': serialized_stats,
             'kinds': kinds,
-            'tasks': [CaseSerializer.serialize_summary(c) for c in tasks[:8]],
-            'recent': [CaseSerializer.serialize_summary(c) for c in cases[:6]],
+            'tasks': [CaseSerializer.serialize_summary(c, request.user) for c in tasks[:8]],
+            'recent': [CaseSerializer.serialize_summary(c, request.user) for c in cases[:6]],
             'alerts': alerts[:8],
         })
 
@@ -727,7 +748,7 @@ class CaseModuleApiView(BaseApiView):
             'num_pages': page_obj.paginator.num_pages,
             'has_previous': page_obj.has_previous(),
             'has_next': page_obj.has_next(),
-            'cases': [CaseSerializer.serialize_summary(c) for c in page_obj.object_list],
+            'cases': [CaseSerializer.serialize_summary(c, request.user) for c in page_obj.object_list],
             'fields_schema': FieldSchemaBuilder.build(BASE_FIELDS[kind]),
         })
 
@@ -893,6 +914,22 @@ class CaseVacationInterruptionApiView(BaseApiView):
             CaseSerializer.serialize_detail(request, updated),
             message='Novedad registrada. Los días no disfrutados quedaron devueltos al periodo.',
         )
+
+
+class VacationPreviewApiView(BaseApiView):
+    def get(self, request):
+        try:
+            start = date.fromisoformat(request.GET.get('start', ''))
+            days = int(request.GET.get('days', ''))
+        except (ValueError, TypeError):
+            raise ValidationError('Indique una fecha válida y la cantidad de días hábiles.')
+        if not 1 <= days <= 15:
+            raise ValidationError('Indique entre 1 y 15 días hábiles.')
+        end = vacations.add_business_days(start, days)
+        return self.json_success({
+            'end': end.isoformat(),
+            'return_date': vacations.next_business_day(end).isoformat(),
+        })
 
 
 class VacationDashboardApiView(BaseApiView):
@@ -1133,11 +1170,11 @@ class ProcedureApiView(BaseApiView):
 
     def get(self, request):
         modules = []
-        titles = {
-            **KIND_TITLES,
-            'compensatorio': 'Gestión de compensatorios · propuesta',
-        }
+        titles = KIND_TITLES
         for kind, stages in WORKFLOWS.items():
+            policy = PolicyVersion.objects.filter(kind=kind).order_by('-version').first()
+            if policy:
+                stages = workflow(Case(kind=kind, policy=policy))
             serialized_stages = []
             for idx, s in enumerate(stages, start=1):
                 serialized_stages.append({
@@ -1151,6 +1188,8 @@ class ProcedureApiView(BaseApiView):
             modules.append({
                 'kind': kind,
                 'title': titles[kind],
+                'confirmed': bool(policy and policy.confirmed),
+                'version': policy.version if policy else None,
                 'stages': serialized_stages,
             })
         return self.json_success({'modules': modules})
@@ -1372,3 +1411,378 @@ class AuditApiView(BaseApiView):
                 for e in page_obj.object_list
             ],
         })
+
+
+class EmployeeProfileSerializer:
+    """Serializador para personas, sus perfiles institucionales y sus documentos de hoja de vida."""
+
+    CATEGORY_LABELS = dict(EMPLOYEE_DOC_CATEGORIES)
+    ROLE_LABELS_MAP = dict(ROLES)
+
+    @classmethod
+    def serialize_document(cls, doc):
+        return {
+            'id': doc.pk,
+            'category': doc.category,
+            'category_label': cls.CATEGORY_LABELS.get(doc.category, doc.category),
+            'title': doc.title or cls.CATEGORY_LABELS.get(doc.category, doc.name),
+            'notes': doc.notes or '',
+            'name': doc.name,
+            'content_type': doc.content_type,
+            'size': doc.size,
+            'sha256': doc.sha256,
+            'uploaded_by': doc.uploaded_by.get_full_name() or doc.uploaded_by.username,
+            'created_at': doc.created_at.isoformat(),
+            'preview_url': reverse('employee_document_preview', args=[doc.pk]),
+            'download_url': reverse('employee_document_download', args=[doc.pk]),
+        }
+
+    @classmethod
+    def serialize_person(cls, user, docs=None):
+        profile = getattr(user, 'profile', None)
+        dependencia = getattr(profile, 'dependencia', None)
+        roles = [g.name for g in user.groups.all()]
+        if docs is None:
+            docs = list(user.employee_documents.defer('content').select_related('uploaded_by'))
+        hojas_vida = [d for d in docs if d.category == 'hoja_vida']
+        latest_hv = cls.serialize_document(hojas_vida[0]) if hojas_vida else None
+        return {
+            'id': user.pk,
+            'username': user.username,
+            'full_name': user.get_full_name() or user.username,
+            'department': profile.department if profile else '',
+            'employment': profile.employment if profile else 'funcionario',
+            'employment_display': profile.get_employment_display() if profile else 'Funcionario',
+            'cedula': (profile.cedula or '') if profile else '',
+            'cargo': profile.cargo if profile else '',
+            'codigo': profile.codigo if profile else '',
+            'grado': profile.grado if profile else '',
+            'hire_date': profile.hire_date.isoformat() if (profile and profile.hire_date) else '',
+            'phone': getattr(profile, 'phone', '') if profile else '',
+            'institutional_email': getattr(profile, 'institutional_email', '') if profile else '',
+            'profession': getattr(profile, 'profession', '') if profile else '',
+            'bio': getattr(profile, 'bio', '') if profile else '',
+            'is_jefe': bool(dependencia and dependencia.jefe_id == user.pk),
+            'is_active': user.is_active,
+            'roles': roles,
+            'role_labels': [cls.ROLE_LABELS_MAP.get(r, r) for r in roles],
+            'hoja_vida_count': len(hojas_vida),
+            'documents_count': len(docs),
+            'latest_hoja_vida': latest_hv,
+        }
+
+
+class PersonnelApiView(BaseApiView):
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            try:
+                require_personnel_manager(request.user)
+            except PermissionDenied as exc:
+                return self.json_error(str(exc), status=403)
+        return super().dispatch(request, *args, **kwargs)
+
+
+class HojasDeVidaListApiView(PersonnelApiView):
+    """Directorio de personas y creación de usuarios con su expediente de Hoja de Vida."""
+
+    def get(self, request):
+        from django.db.models import Prefetch
+        docs_prefetch = Prefetch(
+            'employee_documents',
+            queryset=EmployeeDocument.objects.defer('content').select_related('uploaded_by'),
+        )
+        users_qs = (
+            User.objects.select_related('profile', 'profile__dependencia')
+            .prefetch_related('groups', docs_prefetch)
+            .order_by('first_name', 'username')
+        )
+        people = [
+            EmployeeProfileSerializer.serialize_person(u, list(u.employee_documents.all()))
+            for u in users_qs
+        ]
+        dependencias = list(Dependencia.objects.filter(active=True).values_list('name', flat=True))
+        return self.json_success({
+            'people': people,
+            'dependencias': dependencias,
+            'available_roles': [[k, label] for k, label in ROLES],
+            'employments': [['funcionario', 'Funcionario'], ['contratista', 'Contratista']],
+            'document_categories': [[k, label] for k, label in EMPLOYEE_DOC_CATEGORIES],
+        })
+
+    def post(self, request):
+        require_role(request.user, 'administrador')
+        body = self.parse_body(request)
+        name = (body.get('name') or '').strip()[:150]
+        username = (body.get('username') or '').strip()[:150]
+        department = (body.get('department') or '').strip()[:160]
+        employment = (body.get('employment') or 'funcionario').strip()
+        cedula = (body.get('cedula') or '').strip() or None
+        cargo = (body.get('cargo') or '').strip()[:120]
+        codigo = (body.get('codigo') or '').strip()[:10]
+        grado = (body.get('grado') or '').strip()[:10]
+        hire_date_raw = (body.get('hire_date') or '').strip()
+        phone = (body.get('phone') or '').strip()[:40]
+        institutional_email = (body.get('institutional_email') or '').strip()[:160]
+        profession = (body.get('profession') or '').strip()[:160]
+        bio = (body.get('bio') or '').strip()[:5000]
+        password = body.get('password') or ''
+        is_jefe_raw = body.get('is_jefe')
+        is_jefe = is_jefe_raw in (True, 'true', 'True', '1', 'on')
+
+        roles = body.get('roles')
+        if isinstance(roles, str):
+            try:
+                roles = json.loads(roles)
+            except json.JSONDecodeError:
+                roles = [r.strip() for r in roles.split(',') if r.strip()]
+        if not roles or not isinstance(roles, list):
+            roles = ['solicitante']
+        valid_role_keys = {k for k, _ in ROLES}
+        roles = [r for r in roles if r in valid_role_keys] or ['solicitante']
+
+        if not name:
+            return self.json_error('El nombre completo de la persona es obligatorio.', status=400)
+        if not username:
+            return self.json_error('El nombre de usuario es obligatorio.', status=400)
+        if not department:
+            return self.json_error('La dependencia es obligatoria.', status=400)
+        try:
+            User._meta.get_field('username').run_validators(username)
+        except ValidationError as exc:
+            return self.json_error(exc.messages, status=400)
+        if User.objects.filter(username__iexact=username).exists():
+            return self.json_error('Ese nombre de usuario ya está registrado.', status=400)
+        validate_password(password, User(username=username, first_name=name))
+        if cedula:
+            if not cedula.isdigit() or not (5 <= len(cedula) <= 15):
+                return self.json_error('Escriba la cédula solo con números (entre 5 y 15 dígitos).', status=400)
+            if Profile.objects.filter(cedula=cedula).exists():
+                return self.json_error('Otra persona ya tiene registrada esa cédula.', status=400)
+
+        hire_date = None
+        if hire_date_raw:
+            try:
+                hire_date = date.fromisoformat(hire_date_raw)
+            except ValueError:
+                return self.json_error('La fecha de ingreso no tiene un formato válido.', status=400)
+            if hire_date > timezone.localdate():
+                return self.json_error('La fecha de ingreso no puede ser futura.', status=400)
+
+        uploaded_file = request.FILES.get('file')
+        doc_category = (body.get('doc_category') or 'hoja_vida').strip()
+        doc_title = (body.get('doc_title') or '').strip()
+        doc_notes = (body.get('doc_notes') or '').strip()
+
+        with transaction.atomic():
+            new_user = User.objects.create_user(username, password=password, first_name=name)
+            profile = Profile.objects.create(user=new_user, department=department)
+            services.apply_profile(profile, {
+                'department': department,
+                'employment': employment if employment in {'funcionario', 'contratista'} else 'funcionario',
+                'cedula': cedula,
+                'cargo': cargo,
+                'codigo': codigo,
+                'grado': grado,
+                'hire_date': hire_date,
+                'phone': phone,
+                'institutional_email': institutional_email,
+                'profession': profession,
+                'bio': bio,
+                'is_jefe': is_jefe,
+            })
+            new_user.groups.set([Group.objects.get_or_create(name=r)[0] for r in roles])
+            services.audit(
+                None,
+                request.user,
+                'Persona creada en Hojas de Vida',
+                target_user=new_user.pk,
+                roles=roles,
+            )
+            if uploaded_file:
+                services.upload_employee_document(
+                    request.user,
+                    new_user,
+                    doc_category,
+                    uploaded_file,
+                    title=doc_title or f'Hoja de Vida · {name}',
+                    notes=doc_notes,
+                )
+
+        return self.json_success(
+            data={'user_id': new_user.pk},
+            message=f'Persona "{name}" creada correctamente.',
+            status=201,
+        )
+
+
+class HojaDeVidaDetailApiView(PersonnelApiView):
+    """Detalle completo de la hoja de vida de una persona, sus datos laborales y todos sus documentos."""
+
+    def get(self, request, user_id):
+        target_user = get_object_or_404(
+            User.objects.select_related('profile', 'profile__dependencia').prefetch_related('groups'),
+            pk=user_id,
+        )
+        docs = list(target_user.employee_documents.defer('content').select_related('uploaded_by'))
+        serialized_docs = [EmployeeProfileSerializer.serialize_document(d) for d in docs]
+        person = EmployeeProfileSerializer.serialize_person(target_user, docs)
+        dependencias = list(Dependencia.objects.filter(active=True).values_list('name', flat=True))
+        return self.json_success({
+            'person': person,
+            'documents': serialized_docs,
+            'dependencias': dependencias,
+            'available_roles': [[k, label] for k, label in ROLES],
+            'employments': [['funcionario', 'Funcionario'], ['contratista', 'Contratista']],
+            'document_categories': [[k, label] for k, label in EMPLOYEE_DOC_CATEGORIES],
+        })
+
+    def post(self, request, user_id):
+        target_user = get_object_or_404(
+            User.objects.select_related('profile', 'profile__dependencia').prefetch_related('groups'),
+            pk=user_id,
+        )
+        body = self.parse_body(request)
+        if 'administrador' not in role_names(request.user):
+            if any(key in body for key in ('roles', 'is_active', 'password')):
+                raise PermissionDenied('Solo Administración puede cambiar el acceso, los roles o la contraseña.')
+        profile = getattr(target_user, 'profile', None) or Profile(user=target_user, department='')
+
+        name = (body.get('full_name') or body.get('name') or target_user.first_name or target_user.username).strip()[:150]
+        department = (body.get('department') or profile.department or '').strip()[:160]
+        if not department:
+            return self.json_error('La dependencia es obligatoria.', status=400)
+
+        employment = (body.get('employment') or profile.employment or 'funcionario').strip()
+        cedula = (body.get('cedula') or '').strip() or None
+        if cedula:
+            if not cedula.isdigit() or not (5 <= len(cedula) <= 15):
+                return self.json_error('Escriba la cédula solo con números (entre 5 y 15 dígitos).', status=400)
+            if Profile.objects.filter(cedula=cedula).exclude(user=target_user).exists():
+                return self.json_error('Otra persona ya tiene registrada esa cédula.', status=400)
+
+        hire_date = profile.hire_date
+        if 'hire_date' in body:
+            hire_date_raw = (body.get('hire_date') or '').strip()
+            if hire_date_raw:
+                try:
+                    hire_date = date.fromisoformat(hire_date_raw)
+                except ValueError:
+                    return self.json_error('La fecha de ingreso no es válida.', status=400)
+                if hire_date > timezone.localdate():
+                    return self.json_error('La fecha de ingreso no puede ser futura.', status=400)
+            else:
+                hire_date = None
+
+        roles = body.get('roles')
+        if roles is not None:
+            if isinstance(roles, str):
+                try:
+                    roles = json.loads(roles)
+                except json.JSONDecodeError:
+                    roles = [r.strip() for r in roles.split(',') if r.strip()]
+            valid_role_keys = {k for k, _ in ROLES}
+            roles = [r for r in roles if r in valid_role_keys] or ['solicitante']
+
+        active = body.get('is_active', target_user.is_active)
+        if isinstance(active, str):
+            active = active in ('true', 'True', '1', 'on')
+
+        is_jefe = body.get('is_jefe')
+        if is_jefe is not None and isinstance(is_jefe, str):
+            is_jefe = is_jefe in ('true', 'True', '1', 'on')
+
+        new_password = body.get('password') or ''
+        if new_password:
+            validate_password(new_password, target_user)
+
+        with transaction.atomic():
+            if (
+                (not active or (roles is not None and 'administrador' not in roles))
+                and 'administrador' in role_names(target_user)
+                and not User.objects.filter(is_active=True, groups__name='administrador').exclude(pk=target_user.pk).exists()
+            ):
+                return self.json_error('Debe conservar al menos un administrador activo.', status=400)
+
+            target_user.first_name = name
+            target_user.is_active = bool(active)
+            if new_password:
+                target_user.set_password(new_password)
+            target_user.save()
+
+            profile_data = {
+                'department': department,
+                'employment': employment if employment in {'funcionario', 'contratista'} else 'funcionario',
+                'cedula': cedula,
+                'cargo': (body.get('cargo') if 'cargo' in body else profile.cargo or '').strip()[:120],
+                'codigo': (body.get('codigo') if 'codigo' in body else profile.codigo or '').strip()[:10],
+                'grado': (body.get('grado') if 'grado' in body else profile.grado or '').strip()[:10],
+                'hire_date': hire_date,
+                'phone': (body.get('phone') if 'phone' in body else getattr(profile, 'phone', '') or '').strip()[:40],
+                'institutional_email': (body.get('institutional_email') if 'institutional_email' in body else getattr(profile, 'institutional_email', '') or '').strip()[:160],
+                'profession': (body.get('profession') if 'profession' in body else getattr(profile, 'profession', '') or '').strip()[:160],
+                'bio': (body.get('bio') if 'bio' in body else getattr(profile, 'bio', '') or '').strip()[:5000],
+            }
+            if is_jefe is not None:
+                profile_data['is_jefe'] = bool(is_jefe)
+            services.apply_profile(profile, profile_data)
+
+            if roles is not None:
+                target_user.groups.set([Group.objects.get_or_create(name=r)[0] for r in roles])
+
+            services.audit(
+                None,
+                request.user,
+                'Ficha de hoja de vida actualizada',
+                target_user=target_user.pk,
+            )
+
+        docs = list(target_user.employee_documents.defer('content').select_related('uploaded_by'))
+        return self.json_success(
+            data={'person': EmployeeProfileSerializer.serialize_person(target_user, docs)},
+            message='Datos de la hoja de vida actualizados correctamente.',
+        )
+
+
+class HojaDeVidaDocumentUploadApiView(PersonnelApiView):
+    """Carga de hojas de vida y documentos soporte dentro del perfil de una persona."""
+
+    def post(self, request, user_id):
+        target_user = get_object_or_404(User, pk=user_id)
+        uploaded_file = request.FILES.get('file')
+        category = (request.POST.get('category') or 'hoja_vida').strip()
+        title = (request.POST.get('title') or '').strip()
+        notes = (request.POST.get('notes') or '').strip()
+        doc = services.upload_employee_document(
+            request.user,
+            target_user,
+            category,
+            uploaded_file,
+            title=title,
+            notes=notes,
+        )
+        return self.json_success(
+            data=EmployeeProfileSerializer.serialize_document(doc),
+            message='Documento incorporado a la hoja de vida.',
+            status=201,
+        )
+
+
+class HojaDeVidaDocumentDeleteApiView(PersonnelApiView):
+    """Elimina un documento o versión del expediente de hoja de vida de una persona."""
+
+    def post(self, request, user_id, document_id):
+        target_user = get_object_or_404(User, pk=user_id)
+        doc = get_object_or_404(EmployeeDocument.objects.defer('content'), pk=document_id, employee=target_user)
+        doc_title = doc.title or doc.name
+        doc_cat = doc.category
+        with transaction.atomic():
+            doc.delete()
+            services.audit(
+                None,
+                request.user,
+                'Documento de hoja de vida eliminado',
+                note=doc_title,
+                employee_id=target_user.pk,
+                category=doc_cat,
+            )
+        return self.json_success(message='Documento eliminado de la hoja de vida.')

@@ -41,24 +41,21 @@ export function ProcedurePage({ onNotify }: ProcedurePageProps) {
           <p>Consulte las etapas, responsables propuestos y documentos exigidos.</p>
         </div>
       </header>
-      <div className="notice">
+      {data?.modules.some((module) => !module.confirmed) && <div className="notice">
         <span className="notice-icon">i</span>
         <div>
           <strong>Matriz técnica provisional</strong>
           <p>
-            Las fuentes de incapacidades, recobros y viáticos siguen pendientes de incorporar.
-            Tampoco se ha recibido el procedimiento oficial de compensatorios: su flujo,
-            equivalencias, límites y condiciones son una propuesta configurable, no una regla
-            vigente.
+            Los módulos marcados como provisionales requieren revisión de sus fuentes y aprobación institucional. Consulte su versión y las responsabilidades antes de tramitar un expediente.
           </p>
         </div>
-      </div>
+      </div>}
 
       {data?.modules.map((mod) => (
         <section key={mod.kind} className="card">
           <header className="card-heading">
             <h2>{mod.title}</h2>
-            <span className="badge">{mod.stages.length} etapas</span>
+            <span className={`badge ${mod.confirmed ? '' : 'warning'}`}>{mod.confirmed ? `Versión ${mod.version} aprobada` : 'Procedimiento provisional'} · {mod.stages.length} etapas</span>
           </header>
           <div className="table-wrap">
             <table>
@@ -77,7 +74,6 @@ export function ProcedurePage({ onNotify }: ProcedurePageProps) {
                       <strong>
                         {s.number}. {s.label}
                       </strong>
-                      <small>{s.key}</small>
                     </td>
                     <td>{s.roles.join(', ')}</td>
                     <td>

@@ -1,3 +1,4 @@
+import { LoadError } from '../components/LoadError';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AppLink } from '../components/AppLink';
 import { FormateadorTexto } from '../domain/Formatters';
@@ -160,7 +161,7 @@ export function ConfigPage({ onNotify }: ConfigPageProps) {
     );
   }
 
-  if (!data) return null;
+  if (!data) return <LoadError />;
 
   return (
     <>
@@ -185,9 +186,7 @@ export function ConfigPage({ onNotify }: ConfigPageProps) {
         <div>
           <strong>Validación institucional requerida</strong>
           <p>
-            Las fuentes oficiales no están incorporadas y no se ha recibido el procedimiento de
-            compensatorios. Contraste responsables, transiciones, límites, equivalencias, requisitos
-            y condiciones antes de aprobar y habilitar una versión.
+            Contraste responsables, transiciones, límites, equivalencias, requisitos y condiciones con sus fuentes antes de aprobar una nueva versión.
           </p>
         </div>
       </div>
@@ -323,6 +322,7 @@ export function ConfigPage({ onNotify }: ConfigPageProps) {
                 <input
                   id="pol-confirmed"
                   type="checkbox"
+                  required
                   checked={polConfirmed}
                   onChange={(e) => setPolConfirmed(e.target.checked)}
                 />

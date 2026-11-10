@@ -6,3 +6,5 @@ var/
 .coverage
 staticfiles/
 var-demo/
+Front_Contraloria/test-results/
+Front_Contraloria/playwright-report/

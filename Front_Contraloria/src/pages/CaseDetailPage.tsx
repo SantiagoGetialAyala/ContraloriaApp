@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { AppLink } from '../components/AppLink';
 import { DynamicFields } from '../components/DynamicFields';
+import { useUnsavedChanges } from '../components/useUnsavedChanges';
 import type { ExpedienteBase } from '../domain/Expediente';
 import { FormateadorTexto } from '../domain/Formatters';
-import type { CaseKind } from '../domain/types';
+import type { CaseDetailDTO, CaseKind } from '../domain/types';
 import { ApiError } from '../services/HttpClient';
 import { appServices } from '../services/ServiceContainer';
 
@@ -11,6 +12,19 @@ interface CaseDetailPageProps {
   caseId: string;
   onActiveKindChange: (kind: CaseKind | null) => void;
   onNotify: (type: 'success' | 'error' | 'warning', text: string) => void;
+}
+
+const sections = [
+  { key: 'gestion', label: 'Gestión de etapa' },
+  { key: 'documentos', label: 'Documentos' },
+  { key: 'resumen', label: 'Información' },
+  { key: 'finanzas', label: 'Finanzas y saldos' },
+  { key: 'historial', label: 'Historial' },
+] as const;
+type SectionKey = typeof sections[number]['key'];
+function currentSection(): SectionKey {
+  const hash = window.location.hash.slice(1);
+  return sections.find((section) => section.key === hash)?.key ?? 'gestion';
 }
 
 export function CaseDetailPage({
@@ -46,10 +60,24 @@ export function CaseDetailPage({
   const [intDocId, setIntDocId] = useState('');
 
   const [busy, setBusy] = useState(false);
+  const [historyEvents, setHistoryEvents] = useState<CaseDetailDTO['events'] | null>(null);
+  const [includeAccess, setIncludeAccess] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [activeSection, setActiveSection] = useState<SectionKey>(currentSection);
+  const unsaved = Boolean(expediente?.detalle?.fields_schema.some((field) => String(formValues[field.key] ?? '') !== String(field.value)));
+  useUnsavedChanges(unsaved);
+
+  useEffect(() => {
+    const update = () => setActiveSection(currentSection());
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
 
   const sincronizarEstadoLocal = useCallback(
     (exp: ExpedienteBase) => {
       setExpediente(exp);
+      setHistoryEvents(null);
+      setIncludeAccess(false);
       onActiveKindChange(exp.kind);
       const det = exp.detalle;
       if (det) {
@@ -79,17 +107,19 @@ export function CaseDetailPage({
   );
 
   const cargar = useCallback(
-    async (historyPage = 1) => {
+    async (historyPage = 1, access = includeAccess) => {
+      setHistoryBusy(true);
       try {
-        const exp = await appServices.expedientes.obtenerDetalle(caseId, historyPage);
-        sincronizarEstadoLocal(exp);
+        const exp = await appServices.expedientes.obtenerDetalle(caseId, historyPage, access);
+        if (exp.detalle) setHistoryEvents(exp.detalle.events);
+        setIncludeAccess(access);
       } catch (err) {
         onNotify('error', err instanceof Error ? err.message : 'No fue posible abrir el expediente.');
       } finally {
-        setLoading(false);
+        setHistoryBusy(false);
       }
     },
-    [caseId, onNotify, sincronizarEstadoLocal],
+    [caseId, onNotify, includeAccess],
   );
 
   useEffect(() => {
@@ -124,9 +154,10 @@ export function CaseDetailPage({
     );
   }
 
-  if (!expediente || !expediente.detalle) return null;
+  if (!expediente || !expediente.detalle) return <section className="card padded"><h1>No se pudo abrir el expediente</h1><p>Compruebe que existe y que tiene acceso.</p><AppLink className="btn secondary" to="/">Volver al inicio</AppLink></section>;
 
   const det = expediente.detalle;
+  const events = historyEvents ?? det.events;
   const avisosEtapa = expediente.getAvisosEtapaActual(det.step?.key);
   const indicadoresFinancieros = expediente.getIndicadoresFinancieros();
   const scaleSnapshot = expediente.data.scale_snapshot as Record<string, unknown> | undefined;
@@ -159,6 +190,10 @@ export function CaseDetailPage({
     action: 'advance' | 'return' | 'reject',
     confirmMessage: string,
   ) => {
+    if (unsaved) {
+      onNotify('warning', 'Guarde los cambios de la etapa antes de registrar una decisión.');
+      return;
+    }
     if (!window.confirm(confirmMessage)) return;
     setBusy(true);
     try {
@@ -184,6 +219,7 @@ export function CaseDetailPage({
 
   const handleFollowupSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (unsaved) { onNotify('warning', 'Guarde los datos de la etapa antes de registrar el seguimiento.'); return; }
     setBusy(true);
     try {
       const { expediente: actualizado, mensaje } = await appServices.expedientes.ejecutarDecision(
@@ -208,6 +244,7 @@ export function CaseDetailPage({
 
   const handleUploadSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (unsaved) { onNotify('warning', 'Guarde los datos de la etapa antes de incorporar el documento.'); return; }
     const file = fileInputRef.current?.files?.[0];
     if (!file) {
       onNotify('error', 'Seleccione un archivo PDF, PNG o JPG.');
@@ -431,30 +468,17 @@ export function CaseDetailPage({
       )}
 
       <nav className="section-links" aria-label="Secciones del expediente">
-        <a href="#gestion">Gestión de etapa</a>
-        <a href="#resumen">Información</a>
-        <a href="#finanzas">
-          {expediente.kind === 'compensatorio' || expediente.kind === 'vacaciones'
-            ? 'Saldos'
-            : 'Finanzas'}
-        </a>
-        <a href="#documentos">Documentos</a>
-        <a href="#historial">Historial</a>
+        {sections.map((section) => <a key={section.key} href={`#${section.key}`} aria-current={activeSection === section.key ? 'page' : undefined} onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          setActiveSection(section.key);
+          window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}#${section.key}`);
+        }}>{section.label}{section.key === 'documentos' ? ` (${det.documents.length})` : ''}</a>)}
       </nav>
 
       <div className="detail-layout">
-        <aside className="card step-card">
-          <div className="card-heading">
-            <div>
-              <h2>Recorrido del expediente</h2>
-              <p>{expediente.progress}% de etapas recorridas</p>
-            </div>
-          </div>
-          <progress
-            value={expediente.progress}
-            max={100}
-            aria-label="Avance del expediente"
-          ></progress>
+        <details className="card step-card stage-disclosure" hidden={activeSection !== 'gestion'}>
+          <summary>Consultar etapas del procedimiento <small>{det.steps.filter((step) => step.done).length} de {det.steps.length} con actuación completada</small></summary>
           <ol className="steps">
             {det.steps.map((s, idx) => (
               <li
@@ -463,20 +487,19 @@ export function CaseDetailPage({
               >
                 <span className="step-number">{s.done ? '✓' : idx + 1}</span>
                 <div>
-                  <strong>{s.label}</strong>
+                  <strong>{s.label}{s.current ? ' · Actual' : ''}</strong>
                   <small>{s.role_labels.join(', ')}</small>
                 </div>
               </li>
             ))}
           </ol>
           <p className="help padded">
-            Versión {expediente.policyVersion} · El avance representa etapas registradas. Cada
-            actuación conserva su evidencia.
+            Versión {expediente.policyVersion}. Las marcas corresponden a etapas completadas según las actuaciones registradas. Las devoluciones y reaperturas actualizan su estado.
           </p>
-        </aside>
+        </details>
 
         <div className="detail-main">
-          <section className="card" id="gestion">
+          <section className="card" id="gestion" hidden={activeSection !== 'gestion'}>
             <header className="card-heading">
               <div>
                 <div className="eyebrow">ETAPA ACTUAL</div>
@@ -508,7 +531,7 @@ export function CaseDetailPage({
                         onChange={(k, v) => setFormValues((prev) => ({ ...prev, [k]: v }))}
                       />
                       <div className="form-actions">
-                        <small className="help">Guarde los datos antes de continuar la etapa.</small>
+                        <small className="help">{unsaved ? 'Tiene cambios sin guardar.' : 'Guarde los datos antes de continuar la etapa.'}</small>
                         <button className="btn secondary" type="submit" disabled={busy}>
                           Guardar datos
                         </button>
@@ -611,7 +634,7 @@ export function CaseDetailPage({
             </div>
           </section>
 
-          <section className="card" id="resumen">
+          <section className="card" id="resumen" hidden={activeSection !== 'resumen'}>
             <header className="card-heading">
               <div>
                 <h2>Información del expediente</h2>
@@ -649,7 +672,7 @@ export function CaseDetailPage({
             )}
           </section>
 
-          <section className="card" id="finanzas">
+          <section className="card" id="finanzas" hidden={activeSection !== 'finanzas'}>
             <header className="card-heading">
               <div>
                 <h2>{expediente.getTituloSeccionFinanzas()}</h2>
@@ -1052,7 +1075,7 @@ export function CaseDetailPage({
             )}
           </section>
 
-          <section className="card" id="documentos">
+          <section className="card" id="documentos" hidden={activeSection !== 'documentos'}>
             <header className="card-heading">
               <div>
                 <h2>
@@ -1143,15 +1166,16 @@ export function CaseDetailPage({
             )}
           </section>
 
-          <section className="card" id="historial">
+          <section className="card" id="historial" hidden={activeSection !== 'historial'}>
             <header className="card-heading">
               <div>
                 <h2>Historial de actuaciones</h2>
                 <p>
-                  Responsables, decisiones, consultas y evidencias del recorrido administrativo.
+                  Actuaciones efectivamente registradas, con su responsable y fecha.
                 </p>
               </div>
             </header>
+            <label className="history-filter padded"><input type="checkbox" checked={includeAccess} disabled={historyBusy} onChange={(event) => { setIncludeAccess(event.target.checked); void cargar(1, event.target.checked); }} />Incluir consultas, descargas y controles de acceso</label>
             {!expediente.esTerminal() && (
               <form className="padded" onSubmit={handleFollowupSubmit} aria-busy={busy}>
                 <div className="field">
@@ -1173,7 +1197,7 @@ export function CaseDetailPage({
             )}
 
             <ol className="history">
-              {det.events.items.map((e) => (
+              {events.items.map((e) => (
                 <li key={e.id}>
                   <span className="history-dot"></span>
                   <div>
@@ -1181,7 +1205,7 @@ export function CaseDetailPage({
                     <small>
                       {e.actor} · {FormateadorTexto.fechaHora(e.created_at)}
                     </small>
-                    {(e.before || e.after) && (
+                    {e.before !== e.after && (e.before || e.after) && (
                       <div className="history-states">
                         {e.before || 'Inicio'} → {e.after || '—'}
                       </div>
@@ -1200,31 +1224,34 @@ export function CaseDetailPage({
               ))}
             </ol>
 
-            <div className="pagination">
+            {events.items.length === 0 && <p className="padded muted">No hay actuaciones registradas.</p>}
+            {events.num_pages > 1 && <div className="pagination" aria-busy={historyBusy}>
               <span>
-                Página {det.events.page} de {det.events.num_pages}
+                Página {events.page} de {events.num_pages}
               </span>
               <div>
-                {det.events.has_previous && (
+                {events.has_previous && (
                   <button
                     type="button"
                     className="btn secondary"
-                    onClick={() => void cargar(det.events.page - 1)}
+                    disabled={historyBusy}
+                    onClick={() => void cargar(events.page - 1)}
                   >
                     ← Anterior
                   </button>
                 )}
-                {det.events.has_next && (
+                {events.has_next && (
                   <button
                     type="button"
                     className="btn secondary"
-                    onClick={() => void cargar(det.events.page + 1)}
+                    disabled={historyBusy}
+                    onClick={() => void cargar(events.page + 1)}
                   >
                     Siguiente →
                   </button>
                 )}
               </div>
-            </div>
+            </div>}
           </section>
         </div>
       </div>

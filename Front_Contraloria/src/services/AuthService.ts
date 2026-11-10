@@ -12,13 +12,17 @@ export interface EstadoSesionModel {
  * Servicio orientado a objetos para la gestión de sesiones, alta inicial y credenciales.
  */
 export class AuthService extends BaseApiService {
-  public async obtenerSesion(): Promise<EstadoSesionModel> {
-    const dto = await this.http.get<SessionDTO>('/api/session/');
-    return {
-      autenticado: dto.authenticated,
-      requiereConfiguracionInicial: dto.needs_setup,
-      usuario: dto.user ? new UsuarioSesion(dto.user) : null,
-    };
+  private pendingSession: Promise<EstadoSesionModel> | null = null;
+
+  public obtenerSesion(): Promise<EstadoSesionModel> {
+    if (!this.pendingSession) {
+      this.pendingSession = this.http.get<SessionDTO>('/api/session/').then((dto) => ({
+        autenticado: dto.authenticated,
+        requiereConfiguracionInicial: dto.needs_setup,
+        usuario: dto.user ? new UsuarioSesion(dto.user) : null,
+      })).finally(() => { this.pendingSession = null; });
+    }
+    return this.pendingSession;
   }
 
   public async configurarAdministradorInicial(payload: {
