@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from django import forms
 from django.contrib.auth.models import User
@@ -10,6 +11,7 @@ BASE_FIELDS = {
     'incapacidad': ['start_date', 'end_date', 'leave_type', 'incapacity_number', 'radication_number', 'epicrisis_radication', 'entity', 'observations'],
     'viatico': ['start_date', 'end_date', 'purpose', 'destination', 'category', 'overnight', 'transport', 'observations'],
     'compensatorio': ['work_date', 'work_start', 'work_end', 'break_minutes', 'activity_description', 'observations'],
+    'vacaciones': ['start_date', 'business_days', 'observations'],
 }
 
 class CaseDataForm(forms.Form):
@@ -86,19 +88,50 @@ class SetupForm(forms.Form):
                 self.add_error('username', exc)
         return data
 
-class UserForm(SetupForm):
+class EmploymentFieldsMixin(forms.Form):
+    """Datos laborales del formato de programación de vacaciones."""
+    cedula = forms.RegexField(label='Cédula', regex=r'^\d{5,15}$', required=False, error_messages={'invalid': 'Escriba la cédula solo con números, sin puntos.'})
+    cargo = forms.CharField(label='Cargo', max_length=120, required=False)
+    codigo = forms.CharField(label='Código', max_length=10, required=False)
+    grado = forms.CharField(label='Grado', max_length=10, required=False)
+    hire_date = forms.DateField(label='Fecha de ingreso (base de los periodos de vacaciones)', required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    is_jefe = forms.BooleanField(label='Es jefe inmediato de su dependencia (da visto bueno a vacaciones)', required=False)
+    profile_user = None
+
+    def clean_cedula(self):
+        value = self.cleaned_data.get('cedula') or None
+        if value and Profile.objects.filter(cedula=value).exclude(user=self.profile_user).exists():
+            raise ValidationError('Otra persona ya tiene registrada esa cédula.')
+        return value
+
+    def clean_hire_date(self):
+        value = self.cleaned_data.get('hire_date')
+        if value and value > date.today():
+            raise ValidationError('La fecha de ingreso no puede ser futura.')
+        return value
+
+
+class UserForm(EmploymentFieldsMixin, SetupForm):
     roles = forms.MultipleChoiceField(label='Roles autorizados', choices=ROLES, widget=forms.CheckboxSelectMultiple)
     employment = forms.ChoiceField(label='Vinculación', choices=Profile._meta.get_field('employment').choices)
+    field_order = ['name', 'username', 'department', 'password', 'password_confirm', 'roles', 'employment']
     def clean_username(self):
         value = self.cleaned_data['username']
         if User.objects.filter(username=value).exists():
             raise ValidationError('El usuario ya existe.')
         return value
 
-class UserAccessForm(forms.Form):
+class UserAccessForm(EmploymentFieldsMixin, forms.Form):
     roles = forms.MultipleChoiceField(label='Roles autorizados', choices=ROLES, widget=forms.CheckboxSelectMultiple)
     active = forms.BooleanField(label='Usuario activo', required=False)
     password = forms.CharField(label='Nueva contraseña (opcional)', required=False, widget=forms.PasswordInput)
+    department = forms.CharField(label='Dependencia', max_length=160, required=False)
+    employment = forms.ChoiceField(label='Vinculación', choices=Profile._meta.get_field('employment').choices, required=False)
+    field_order = ['roles', 'active', 'password', 'department', 'employment']
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.profile_user = user
     def clean_password(self):
         value = self.cleaned_data.get('password')
         if value:
@@ -139,4 +172,17 @@ class RecognitionForm(forms.Form):
     def __init__(self, *args, case, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['document_id'].queryset = case.documents.filter(category='reconocimiento').defer('content')
+        self.fields['document_id'].label_from_instance = lambda d: f'{d.name} · {d.created_at:%d/%m/%Y %H:%M}'
+
+
+class VacationInterruptionForm(forms.Form):
+    revision = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
+    kind = forms.ChoiceField(label='Novedad', choices=[('suspension', 'Suspensión (durante el disfrute)'), ('aplazamiento', 'Aplazamiento (antes de iniciar)')])
+    on_date = forms.DateField(label='Fecha desde la cual no se disfrutan los días', widget=forms.DateInput(attrs={'type': 'date'}))
+    reason = forms.CharField(label='Motivo y acto que la soporta', max_length=5000, widget=forms.Textarea(attrs={'rows': 3}))
+    document_id = forms.ModelChoiceField(label='Soporte de la novedad', queryset=None)
+
+    def __init__(self, *args, case, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['document_id'].queryset = case.documents.filter(category='novedad_vacaciones').defer('content')
         self.fields['document_id'].label_from_instance = lambda d: f'{d.name} · {d.created_at:%d/%m/%Y %H:%M}'

@@ -37,6 +37,10 @@ python manage.py bootstrap
 7. Las diferencias de viáticos se concilian con gastos soportados y reintegros. Los saldos de recobro se mantienen abiertos hasta su recuperación. Una recuperación posterior a la conciliación devuelve el expediente a Contabilidad y exige nuevas evidencias de sus controles.
 8. En compensatorios, el funcionario registra el tiempo trabajado y sus soportes. El registro no crea saldo. Una autoridad debe reconocer expresamente los minutos bajo reglas institucionales confirmadas; otra actuación expresa autoriza la solicitud y genera el descuento.
 
+## Vacaciones
+
+Antes de programar vacaciones, cargue los festivos del año: `python manage.py cargar_festivos 2026 2027`. En **Usuarios y permisos** registre la fecha de ingreso, la dependencia y el jefe inmediato de cada funcionario. El diseño, los supuestos y las decisiones pendientes están en [docs/vacaciones.md](docs/vacaciones.md). Para probar con datos ficticios, la guía de frontend ([docs/vacaciones-frontend.md](docs/vacaciones-frontend.md)) explica el comando `demo_vacaciones`. El manejo de ramas propuesto está en [docs/flujo-de-trabajo-git.md](docs/flujo-de-trabajo-git.md).
+
 ## Parámetros institucionales
 
 En **Parámetros y normativa**, la autoridad puede:

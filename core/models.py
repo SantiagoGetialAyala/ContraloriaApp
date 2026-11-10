@@ -7,13 +7,34 @@ KINDS = [
     ('incapacidad', 'Incapacidades'),
     ('viatico', 'Viáticos'),
     ('compensatorio', 'Gestión de compensatorios'),
+    ('vacaciones', 'Vacaciones'),
 ]
 ROLES = [('solicitante', 'Funcionario / solicitante'), ('talento', 'Talento Humano'), ('juridica', 'Asesoría Jurídica'), ('tesoreria', 'Tesorería'), ('contabilidad', 'Contabilidad'), ('presupuesto', 'Presupuesto'), ('secretaria', 'Secretaría de Despacho'), ('autoridad', 'Contralor / autoridad competente'), ('control', 'Control Interno'), ('administrador', 'Administrador del sistema')]
+
+class Dependencia(models.Model):
+    """Área institucional. Su jefe da el visto bueno a las vacaciones de su equipo."""
+
+    name = models.CharField(max_length=160, unique=True)
+    jefe = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='dependencias_a_cargo')
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
 
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='profile')
     department = models.CharField(max_length=160)
     employment = models.CharField(max_length=20, choices=[('funcionario', 'Funcionario'), ('contratista', 'Contratista')], default='funcionario')
+    dependencia = models.ForeignKey(Dependencia, on_delete=models.PROTECT, null=True, blank=True, related_name='servidores')
+    cedula = models.CharField(max_length=20, null=True, blank=True, unique=True)
+    cargo = models.CharField(max_length=120, blank=True)
+    codigo = models.CharField(max_length=10, blank=True)
+    grado = models.CharField(max_length=10, blank=True)
+    hire_date = models.DateField(null=True, blank=True)
 
 class PolicyVersion(models.Model):
     kind = models.CharField(max_length=20, choices=KINDS)
@@ -66,7 +87,7 @@ class Case(models.Model):
         indexes = [models.Index(fields=['kind', 'stage']), models.Index(fields=['owner', 'created_at'])]
     @property
     def reference(self):
-        prefixes = {'incapacidad': 'INC', 'viatico': 'VIA', 'compensatorio': 'COM'}
+        prefixes = {'incapacidad': 'INC', 'viatico': 'VIA', 'compensatorio': 'COM', 'vacaciones': 'VAC'}
         return prefixes.get(self.kind, 'EXP') + '-' + str(self.id)[:8].upper()
 
 class Document(models.Model):
@@ -114,6 +135,66 @@ class CompensatoryLedgerEntry(models.Model):
             models.UniqueConstraint(fields=['case', 'kind'], name='unique_compensatory_entry_per_case_kind'),
         ]
         ordering = ['effective_on', 'created_at', 'id']
+
+class Holiday(models.Model):
+    """Festivo nacional; sin festivos registrados para un año no se calculan vacaciones de ese año."""
+
+    date = models.DateField(unique=True)
+    name = models.CharField(max_length=160)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['date']
+
+    def __str__(self):
+        return f'{self.date} · {self.name}'
+
+
+class VacationPeriod(models.Model):
+    """Periodo de causación: un año de servicio que otorga días hábiles de vacaciones."""
+
+    employee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='vacation_periods')
+    number = models.PositiveIntegerField()
+    service_from = models.DateField()
+    service_to = models.DateField()
+    entitled_days = models.PositiveIntegerField(default=15)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['employee', 'number'], name='unique_vacation_period_number'),
+            models.CheckConstraint(condition=Q(service_to__gte=models.F('service_from')), name='vacation_period_dates'),
+            models.CheckConstraint(condition=Q(entitled_days__gt=0), name='vacation_period_days_positive'),
+        ]
+        ordering = ['employee', 'number']
+
+    @property
+    def label(self):
+        return f'Periodo {self.number} ({self.service_from:%d/%m/%Y} a {self.service_to:%d/%m/%Y})'
+
+    def __str__(self):
+        return self.label
+
+
+class VacationLedgerEntry(models.Model):
+    """Libro inmutable de días hábiles por periodo; nunca se edita ni se borra."""
+
+    period = models.ForeignKey(VacationPeriod, on_delete=models.PROTECT, related_name='entries')
+    case = models.ForeignKey(Case, on_delete=models.PROTECT, null=True, blank=True, related_name='vacation_entries')
+    kind = models.CharField(max_length=15, choices=[('disfrute', 'Días concedidos'), ('devolucion', 'Días devueltos por suspensión o aplazamiento'), ('carga_inicial', 'Días disfrutados antes del sistema')])
+    days = models.PositiveIntegerField()
+    effective_on = models.DateField()
+    note = models.TextField(blank=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='vacation_actions')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(days__gt=0), name='vacation_days_positive'),
+            models.UniqueConstraint(fields=['case', 'kind'], condition=Q(case__isnull=False), name='unique_vacation_entry_per_case_kind'),
+        ]
+        ordering = ['effective_on', 'created_at', 'id']
+
 
 class Event(models.Model):
     case = models.ForeignKey(Case, on_delete=models.PROTECT, related_name='events', null=True)

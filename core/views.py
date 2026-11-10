@@ -19,10 +19,13 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST, require_http_methods
 from .models import Case, CompensatoryLedgerEntry, Document, Event, Profile, PolicyVersion, TravelScale, LoginAttempt, ROLES
-from .forms import RecognitionForm, CaseDataForm, UploadForm, PaymentForm, DecisionForm, SetupForm, UserForm, UserAccessForm, ScaleForm, PolicyForm, BASE_FIELDS
-from .workflows import workflow, current_step, editable_step, stage_label, actor_for, actor_for_transition, role_names, WORKFLOWS, DOCS, FIELDS
+from .forms import RecognitionForm, CaseDataForm, UploadForm, PaymentForm, DecisionForm, SetupForm, UserForm, UserAccessForm, ScaleForm, PolicyForm, VacationInterruptionForm, BASE_FIELDS
+from .workflows import workflow, current_step, editable_step, stage_label, actor_for, actor_for_transition, role_names, WORKFLOWS, DOCS, FIELDS, RELATIONAL_ROLES
 from .access import visible_cases, get_case, can_document, require_role
-from . import services
+from . import services, vacations
+
+ROLE_LABELS = {**dict(ROLES), **RELATIONAL_ROLES}
+KIND_TITLES = {'incapacidad': 'Incapacidades y recobro', 'viatico': 'Viáticos y gastos de viaje', 'compensatorio': 'Gestión de compensatorios', 'vacaciones': 'Vacaciones'}
 
 
 def record_failure(request, exc, case=None):
@@ -57,7 +60,7 @@ def setup(request):
                 return redirect('login')
             data = form.cleaned_data
             user = User.objects.create_user(data['username'], password=data['password'], first_name=data['name'])
-            Profile.objects.create(user=user, department=data['department'])
+            services.apply_profile(Profile(user=user), data)
             user.groups.add(Group.objects.get_or_create(name='administrador')[0])
             services.audit(None, user, 'Administrador inicial creado')
         login(request, user)
@@ -138,6 +141,7 @@ def dashboard(request):
         'incapacidad': {'name': 'Incapacidades', 'count': 0, 'closed': 0},
         'viatico': {'name': 'Viáticos', 'count': 0, 'closed': 0},
         'compensatorio': {'name': 'Compensatorios', 'count': 0, 'closed': 0},
+        'vacaciones': {'name': 'Vacaciones', 'count': 0, 'closed': 0},
     }
     stats.update({'comp_pending': 0, 'comp_authorized': 0, 'comp_balance': 0})
     for case in cases:
@@ -191,12 +195,14 @@ def dashboard(request):
                 stats['approved_trips'] += 1
             if case.stage in {'comision', 'legalizacion', 'revision_legalizacion', 'conciliacion'}:
                 stats['legalizations'] += 1
-        else:
+        elif case.kind == 'compensatorio':
             if case.stage in {'revision_soportes', 'validacion_saldo', 'autorizacion_tiempo', 'autorizacion_compensatorio'}:
                 stats['comp_pending'] += 1
             if case.compensatory_entries.filter(kind='debito').exists():
                 stats['comp_authorized'] += 1
     stats['comp_balance'] = services.compensatory_balance(request.user)['balance']
+    # Los recordatorios de vacaciones van primero: son los que dependen de una fecha próxima.
+    alerts = vacations.alerts(request.user, cases) + alerts
     provisional = PolicyVersion.objects.filter(confirmed=False).exists() or not PolicyVersion.objects.exists()
     return render(request, 'core/dashboard.html', {'title': 'Panel de gestión', 'stats': stats, 'tasks': tasks[:8], 'recent': cases[:6], 'alerts': alerts[:8], 'kinds': kinds, 'provisional': provisional, 'task_count': len(tasks), 'today': timezone.localdate()})
 
@@ -235,8 +241,7 @@ def case_list(request, kind):
     states = [(s['key'], s['label']) for s in WORKFLOWS[kind]] + [('correccion', 'En corrección'), ('cerrado', 'Cerrado'), ('rechazado', 'Rechazado')]
     query = request.GET.copy()
     query.pop('page', None)
-    titles = {'incapacidad': 'Incapacidades y recobro', 'viatico': 'Viáticos y gastos de viaje', 'compensatorio': 'Gestión de compensatorios'}
-    return render(request, 'core/list.html', {'title': titles[kind], 'kind': kind, 'cases': cases, 'page': page, 'states': states, 'query': query.urlencode(), 'count': queryset.count()})
+    return render(request, 'core/list.html', {'title': KIND_TITLES[kind], 'kind': kind, 'cases': cases, 'page': page, 'states': states, 'query': query.urlencode(), 'count': queryset.count()})
 
 
 @login_required
@@ -249,7 +254,7 @@ def case_create(request, kind):
         result = []
         if perform(request, lambda: result.append(services.create_case(request.user, kind, form.cleaned_data)), success='Borrador guardado. Adjunte los soportes para enviarlo a revisión.'):
             return redirect('case_detail', case_id=result[0].pk)
-    titles = {'incapacidad': 'Nueva incapacidad', 'viatico': 'Nueva comisión', 'compensatorio': 'Nuevo registro de tiempo trabajado'}
+    titles = {'incapacidad': 'Nueva incapacidad', 'viatico': 'Nueva comisión', 'compensatorio': 'Nuevo registro de tiempo trabajado', 'vacaciones': 'Nueva solicitud de vacaciones'}
     return render(request, 'core/form.html', {'form': form, 'title': titles[kind], 'subtitle': 'Guarde el borrador, complete sus documentos y envíelo a revisión.', 'button': 'Guardar borrador', 'back': reverse('case_list', args=[kind])})
 
 
@@ -257,7 +262,7 @@ def detail_context(request, case, **extra):
     decorate(case)
     step = editable_step(case)
     if step:
-        step['role_labels'] = [dict(ROLES).get(r, 'Solicitante') for r in step['roles']]
+        step['role_labels'] = [ROLE_LABELS.get(r, r) for r in step['roles']]
     can_edit = actor_for(request.user, case) or actor_for_transition(request.user, case)
     keys = BASE_FIELDS[case.kind] if step and step['key'] == 'borrador' else step['fields'] if step else []
     documents = [d for d in case.documents.defer('content').select_related('uploaded_by') if can_document(request.user, d)]
@@ -270,7 +275,7 @@ def detail_context(request, case, **extra):
     for i, s in enumerate(steps):
         s['done'] = i < index or case.stage == 'cerrado'
         s['current'] = i == index and case.stage not in services.TERMINAL
-        s['role_labels'] = [dict(ROLES).get(r, 'Solicitante') for r in s['roles']]
+        s['role_labels'] = [ROLE_LABELS.get(r, r) for r in s['roles']]
     roles = role_names(request.user)
     full = case.owner_id == request.user.pk or bool(roles & {'talento', 'juridica', 'secretaria', 'autoridad', 'control'})
     financial_keys = {'start_date', 'end_date', 'days', 'incapacity_number', 'radication_number', 'epicrisis_radication', 'resolution_number', 'resolution_radication', 'resolution_date', 'payer_entity', 'requested', 'recognized', 'employee_paid', 'employee_paid_on', 'employee_payment_ref', 'finance_notice', 'accounting_reference', 'reconciliation_note', 'balance_note', 'closure_note'}
@@ -286,6 +291,7 @@ def detail_context(request, case, **extra):
         values.append({'label': definition[0], 'value': v})
     events = case.events.select_related('actor').order_by('-created_at', '-id')
     event_page = Paginator(events, 30).get_page(request.GET.get('history_page'))
+    extra.setdefault('vacation', vacation_context(request, case, initial) if case.kind == 'vacaciones' else None)
     return {'case': case, 'title': case.reference, 'step': step, 'steps': steps, 'can_edit': can_edit, 'can_return': can_edit and case.stage not in {'borrador', 'correccion'} and step and 'owner' not in step['roles'], 'full_access': full, 'data_form': CaseDataForm(keys=keys, initial_data=case.data, initial=initial), 'upload_form': UploadForm(categories=categories, initial=initial) if categories else None, 'decision_form': DecisionForm(initial=initial), 'payment_form': PaymentForm(case=case, initial=initial) if services.treasury_allowed(request.user, case) else None, 'documents': documents, 'events': event_page, 'values': values, 'totals': services.totals(case), 'compensatory': services.compensatory_summary(case) if case.kind == 'compensatorio' else None, 'ledger_entries': case.owner.compensatory_ledger.select_related('case', 'actor') if case.kind == 'compensatorio' else [], 'can_recognize': case.kind == 'incapacidad' and 'talento' in roles and case.stage in {'transcripcion', 'comprobante'}, 'recognition_documents': case.documents.filter(category='reconocimiento').defer('content'), 'required_documents': [DOCS[d] for d in step['docs']] if step else [], **extra}
 
 
@@ -384,6 +390,38 @@ def case_recognition(request, case_id):
     return redirect('case_detail', case_id=case.pk)
 
 
+def vacation_context(request, case, initial):
+    try:
+        periods = vacations.period_summary(case.owner)
+    except ValidationError as exc:
+        periods, problem = [], ' '.join(exc.messages)
+    else:
+        problem = ''
+    can_interrupt = services.can_interrupt_vacation(request.user, case)
+    return {
+        'periods': periods,
+        'problem': problem,
+        'entries': case.vacation_entries.select_related('period', 'actor'),
+        'interruption_form': VacationInterruptionForm(case=case, initial=initial) if can_interrupt else None,
+    }
+
+
+@login_required
+@require_POST
+def case_vacation_interruption(request, case_id):
+    case = get_case(request.user, case_id)
+    form = VacationInterruptionForm(request.POST, case=case)
+    if form.is_valid():
+        d = form.cleaned_data
+        perform(request, lambda: services.interrupt_vacation(request.user, case.pk, d['revision'], d['kind'], d['on_date'], d['reason'], d['document_id'].pk), case, 'Novedad de vacaciones registrada.')
+    else:
+        record_failure(request, ValidationError('Novedad rechazada: ' + ', '.join(form.errors)), case)
+        for errors in form.errors.values():
+            for error in errors:
+                messages.error(request, error)
+    return redirect('case_detail', case_id=case.pk)
+
+
 def safe_csv(value):
     value = str(value)
     return "'" + value if value.lstrip().startswith(('=', '+', '-', '@', '\t', '\r')) else value
@@ -397,11 +435,14 @@ def report(request, kind):
     response['Content-Disposition'] = f'attachment; filename="reporte-{kind}-{timezone.localdate()}.csv"'
     response.write('\ufeff')
     writer = csv.writer(response, delimiter=';')
-    financial = {'incapacidad': ['Solicitado', 'Reconocido', 'Recuperado', 'Saldo pendiente', 'Diferencia reconocimiento'], 'viatico': ['Comprometido', 'Autorizado', 'Desembolsado', 'Ejecutado', 'Reintegrado', 'Diferencia'], 'compensatorio': ['Minutos trabajados', 'Minutos reconocidos', 'Minutos solicitados', 'Saldo del funcionario']}[kind]
+    financial = {'incapacidad': ['Solicitado', 'Reconocido', 'Recuperado', 'Saldo pendiente', 'Diferencia reconocimiento'], 'viatico': ['Comprometido', 'Autorizado', 'Desembolsado', 'Ejecutado', 'Reintegrado', 'Diferencia'], 'compensatorio': ['Minutos trabajados', 'Minutos reconocidos', 'Minutos solicitados', 'Saldo del funcionario'], 'vacaciones': ['Periodo de causación', 'Días hábiles', 'Días calendario', 'Reintegro previsto', 'Novedad']}[kind]
     writer.writerow(['Expediente', 'Solicitante', 'Dependencia', 'Estado', 'Creación', 'Inicio', 'Fin', *financial])
     count = 0
     for case in filtered_cases(request, kind).iterator(chunk_size=100):
-        if kind == 'compensatorio':
+        if kind == 'vacaciones':
+            amounts = [case.data.get(k, '') for k in ['period_label', 'business_days', 'days', 'return_date', 'interruption_kind']]
+            start, end = case.data.get('start_date', ''), case.data.get('end_date', '')
+        elif kind == 'compensatorio':
             t = services.compensatory_summary(case)
             amounts = [t[k] for k in ['worked', 'approved', 'requested', 'balance']]
             start, end = case.data.get('request_start_date', ''), case.data.get('request_end_date', '')
@@ -424,7 +465,7 @@ def users(request):
         with transaction.atomic():
             d = form.cleaned_data
             user = User.objects.create_user(d['username'], password=d['password'], first_name=d['name'])
-            Profile.objects.create(user=user, department=d['department'], employment=d['employment'])
+            services.apply_profile(Profile(user=user), d)
             user.groups.set([Group.objects.get_or_create(name=r)[0] for r in d['roles']])
             services.audit(None, request.user, 'Usuario creado', target_user=user.pk, roles=d['roles'])
         messages.success(request, 'Usuario creado.')
@@ -437,7 +478,9 @@ def users(request):
 def user_access(request, user_id):
     require_role(request.user, 'administrador')
     user = get_object_or_404(User, pk=user_id)
-    form = UserAccessForm(request.POST or None, initial={'roles': list(role_names(user)), 'active': user.is_active})
+    profile = Profile.objects.filter(user=user).select_related('dependencia').first() or Profile(user=user, department='')
+    initial = {'roles': list(role_names(user)), 'active': user.is_active, 'department': profile.department, 'employment': profile.employment, 'cedula': profile.cedula, 'cargo': profile.cargo, 'codigo': profile.codigo, 'grado': profile.grado, 'hire_date': profile.hire_date, 'is_jefe': bool(profile.dependencia_id and profile.dependencia.jefe_id == user.pk)}
+    form = UserAccessForm(request.POST or None, initial=initial, user=user)
     if request.method == 'POST' and form.is_valid():
         d = form.cleaned_data
         with transaction.atomic():
@@ -448,6 +491,9 @@ def user_access(request, user_id):
                 if d['password']:
                     user.set_password(d['password'])
                 user.save()
+                d['department'] = d['department'] or profile.department
+                d['employment'] = d['employment'] or profile.employment
+                services.apply_profile(profile, d)
                 user.groups.set([Group.objects.get_or_create(name=r)[0] for r in d['roles']])
                 services.audit(None, request.user, 'Permisos de usuario actualizados', target_user=user.pk, roles=d['roles'], active=d['active'], password_reset=bool(d['password']))
                 messages.success(request, 'Acceso actualizado.')
@@ -498,7 +544,7 @@ def audit_log(request):
 
 @login_required
 def procedure(request):
-    return render(request, 'core/procedure.html', {'title': 'Procedimientos y responsabilidades', 'definitions': WORKFLOWS, 'fields': FIELDS, 'docs': DOCS, 'roles': dict(ROLES)})
+    return render(request, 'core/procedure.html', {'title': 'Procedimientos y responsabilidades', 'definitions': WORKFLOWS, 'fields': FIELDS, 'docs': DOCS, 'roles': ROLE_LABELS})
 
 
 @login_required

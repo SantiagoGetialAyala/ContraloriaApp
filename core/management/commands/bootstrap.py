@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from core.forms import SetupForm
 from core.models import Profile
-from core.services import audit
+from core.services import apply_profile, audit
 
 class Command(BaseCommand):
     help = 'Crea interactivamente el primer administrador, sin contraseña predefinida.'
@@ -19,7 +19,7 @@ class Command(BaseCommand):
                 raise CommandError('La configuración inicial ya fue realizada.')
             d = form.cleaned_data
             user = User.objects.create_user(d['username'], password=d['password'], first_name=d['name'])
-            Profile.objects.create(user=user, department=d['department'])
+            apply_profile(Profile(user=user), d)
             user.groups.add(Group.objects.get_or_create(name='administrador')[0])
             audit(None, user, 'Administrador inicial creado por consola')
         self.stdout.write(self.style.SUCCESS('Administrador creado.'))

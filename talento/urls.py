@@ -1,5 +1,5 @@
 from django.urls import path
-from core import views
+from core import api, views
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
     path('configurar/', views.setup, name='setup'),
@@ -16,6 +16,7 @@ urlpatterns = [
     path('expedientes/<uuid:case_id>/documentos/', views.case_upload, name='case_upload'),
     path('expedientes/<uuid:case_id>/movimientos/', views.case_payment, name='case_payment'),
     path('expedientes/<uuid:case_id>/reconocimiento/', views.case_recognition, name='case_recognition'),
+    path('expedientes/<uuid:case_id>/novedad-vacaciones/', views.case_vacation_interruption, name='case_vacation_interruption'),
     path('documentos/<int:document_id>/ver/', views.document_download, {'preview': True}, name='document_preview'),
     path('documentos/<int:document_id>/descargar/', views.document_download, name='document_download'),
     path('administracion/usuarios/', views.users, name='users'),
@@ -23,6 +24,28 @@ urlpatterns = [
     path('administracion/auditoria/', views.audit_log, name='audit'),
     path('parametros/', views.configuration, name='configuration'),
     path('procedimientos/', views.procedure, name='procedure'),
+    # Endpoints orientados a objetos (API JSON para Front_Contraloria)
+    path('api/session/', api.SessionApiView.as_view(), name='api_session'),
+    path('api/auth/setup/', api.SetupApiView.as_view(), name='api_setup'),
+    path('api/auth/login/', api.LoginApiView.as_view(), name='api_login'),
+    path('api/auth/logout/', api.LogoutApiView.as_view(), name='api_logout'),
+    path('api/auth/password/', api.PasswordChangeApiView.as_view(), name='api_password_change'),
+    path('api/dashboard/', api.DashboardApiView.as_view(), name='api_dashboard'),
+    path('api/cases/<str:kind>/', api.CaseModuleApiView.as_view(), name='api_case_module'),
+    path('api/cases/detail/<uuid:case_id>/', api.CaseDetailApiView.as_view(), name='api_case_detail'),
+    path('api/cases/detail/<uuid:case_id>/save/', api.CaseSaveApiView.as_view(), name='api_case_save'),
+    path('api/cases/detail/<uuid:case_id>/decision/', api.CaseDecisionApiView.as_view(), name='api_case_decision'),
+    path('api/cases/detail/<uuid:case_id>/upload/', api.CaseUploadApiView.as_view(), name='api_case_upload'),
+    path('api/cases/detail/<uuid:case_id>/payment/', api.CasePaymentApiView.as_view(), name='api_case_payment'),
+    path('api/cases/detail/<uuid:case_id>/recognition/', api.CaseRecognitionApiView.as_view(), name='api_case_recognition'),
+    path('api/cases/detail/<uuid:case_id>/vacation-interruption/', api.CaseVacationInterruptionApiView.as_view(), name='api_case_vacation_interruption'),
+    path('api/vacaciones/dashboard/', api.VacationDashboardApiView.as_view(), name='api_vacation_dashboard'),
+    path('api/compensatorios/calendar/', api.CompensatoryCalendarApiView.as_view(), name='api_compensatory_calendar'),
+    path('api/procedures/', api.ProcedureApiView.as_view(), name='api_procedures'),
+    path('api/configuration/', api.ConfigurationApiView.as_view(), name='api_configuration'),
+    path('api/users/', api.UsersApiView.as_view(), name='api_users'),
+    path('api/users/<int:user_id>/', api.UserAccessApiView.as_view(), name='api_user_access'),
+    path('api/audit/', api.AuditApiView.as_view(), name='api_audit'),
 ]
 handler403 = views.forbidden
 handler404 = views.not_found
