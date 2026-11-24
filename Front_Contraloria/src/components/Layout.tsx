@@ -4,6 +4,7 @@ import type { RouteMatch } from '../domain/NavigationController';
 import type { UsuarioSesion } from '../domain/Usuario';
 import type { CaseKind } from '../domain/types';
 import { AppLink } from './AppLink';
+import { FlashMessages } from './FlashMessages';
 import { ThemeToggle } from './ThemeToggle';
 
 export interface FlashMessage {
@@ -126,11 +127,7 @@ export function Layout({ usuario, route, activeCaseKind, messages, onDismissMess
         </div>
       </header>
       <main id="main" className="main" tabIndex={-1}>
-        {messages.length > 0 && <div className="messages" aria-live="polite" aria-atomic="false">
-          {messages.map((m) => <div key={m.id} className={`message ${m.type === 'error' ? 'error' : m.type === 'warning' ? 'warning' : ''}`} role={m.type === 'error' ? 'alert' : 'status'}>
-            <span>{m.text}</span><button type="button" className="dismiss-message" onClick={() => onDismissMessage(m.id)} aria-label="Cerrar aviso">×</button>
-          </div>)}
-        </div>}
+        <FlashMessages messages={messages} onDismiss={onDismissMessage} />
         {children}
         <footer className="footer"><span>Contraloría Municipal de Pasto · Talento Humano</span><span>Información de acceso restringido</span></footer>
       </main>

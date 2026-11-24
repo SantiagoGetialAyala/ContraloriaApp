@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import logoContraloria from '../assets/logo-contraloria.png';
+import { FlashMessages } from '../components/FlashMessages';
 import type { FlashMessage } from '../components/Layout';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ApiError } from '../services/HttpClient';
@@ -8,10 +9,11 @@ import { appServices } from '../services/ServiceContainer';
 interface AuthPageProps {
   setupMode: boolean;
   messages: FlashMessage[];
+  onDismissMessage: (id: number) => void;
   onAuthSuccess: (msg: string) => Promise<void>;
 }
 
-export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) {
+export function AuthPage({ setupMode, messages, onDismissMessage, onAuthSuccess }: AuthPageProps) {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [department, setDepartment] = useState('');
@@ -56,18 +58,7 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
   return (
     <main id="main">
       <ThemeToggle floating />
-      {messages.length > 0 && (
-        <div className="auth-messages" role="status">
-          {messages.map((m) => (
-            <p
-              key={m.id}
-              className={`message ${m.type === 'error' ? 'error' : m.type === 'warning' ? 'warning' : ''}`}
-            >
-              {m.text}
-            </p>
-          ))}
-        </div>
-      )}
+      <FlashMessages messages={messages} onDismiss={onDismissMessage} variant="auth" />
       <div className="auth-layout">
         <section className="auth-story">
           <div className="auth-brand">

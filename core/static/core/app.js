@@ -47,6 +47,42 @@
   });
 })();
 
+// Auto-desvanecimiento rápido de alertas flash en plantillas Django (con pausa al hover).
+document.querySelectorAll('.messages .message, .auth-messages .message').forEach((node) => {
+  const duration = node.classList.contains('error')
+    ? 5500
+    : node.classList.contains('warning')
+      ? 4000
+      : 2800;
+  node.style.setProperty('--toast-duration', `${duration}ms`);
+  let remaining = duration;
+  let startedAt = Date.now();
+  let timer = null;
+  const dismiss = () => {
+    node.classList.add('is-leaving');
+    window.setTimeout(() => node.remove(), 180);
+  };
+  const start = () => {
+    startedAt = Date.now();
+    timer = window.setTimeout(dismiss, Math.max(0, remaining));
+  };
+  const pause = () => {
+    if (timer !== null) {
+      window.clearTimeout(timer);
+      timer = null;
+      remaining = Math.max(0, remaining - (Date.now() - startedAt));
+    }
+    node.classList.add('is-paused');
+  };
+  const resume = () => {
+    node.classList.remove('is-paused');
+    if (timer === null) start();
+  };
+  node.addEventListener('mouseenter', pause);
+  node.addEventListener('mouseleave', resume);
+  start();
+});
+
 document.addEventListener('click', (event) => {
   const button = event.target.closest('[data-confirm]');
   if (button && !window.confirm(button.dataset.confirm)) event.preventDefault();

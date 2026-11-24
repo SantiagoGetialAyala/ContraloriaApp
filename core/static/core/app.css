@@ -897,23 +897,117 @@ small {
   font-size: 12px;
 }
 
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+}
+
+@keyframes toastProgress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 .messages {
-  margin-bottom: 22px;
+  position: fixed;
+  top: 84px;
+  right: 24px;
+  width: min(390px, calc(100vw - 32px));
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
 }
 
 .message {
+  position: relative;
+  overflow: hidden;
+  pointer-events: auto;
   border-radius: var(--radius-sm);
-  padding: 13px 17px;
+  padding: 12px 14px 14px;
   font-size: 12.5px;
   font-weight: 500;
-  margin-bottom: 10px;
+  margin: 0;
   background: var(--status-success-bg);
   color: var(--status-success-fg);
   border: 1px solid var(--status-success-border);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  animation: toastIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.message::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--status-success-dot);
+  transform-origin: left center;
+  animation: toastProgress var(--toast-duration, 2800ms) linear forwards;
+}
+
+.message.is-paused::after,
+.message:hover::after,
+.message:focus-within::after {
+  animation-play-state: paused;
+}
+
+.message.is-leaving {
+  pointer-events: none;
+  animation: toastOut 0.18s ease-in forwards;
+}
+
+.message.is-leaving::after {
+  opacity: 0;
+}
+
+.message-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.message-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .message.info {
@@ -922,10 +1016,18 @@ small {
   border-color: var(--status-info-border);
 }
 
+.message.info::after {
+  background: var(--status-info-dot);
+}
+
 .message.error {
   background: var(--status-error-bg);
   color: var(--status-error-fg);
   border-color: var(--status-error-border);
+}
+
+.message.error::after {
+  background: var(--status-error-dot);
 }
 
 .message.warning {
@@ -934,16 +1036,23 @@ small {
   border-color: var(--status-warning-border);
 }
 
+.message.warning::after {
+  background: var(--status-warning-dot);
+}
+
 .dismiss-message {
   background: none;
   border: 0;
   color: inherit;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
-  min-width: 30px;
-  min-height: 30px;
+  min-width: 26px;
+  min-height: 26px;
   padding: 0;
+  margin: -2px -4px 0 0;
   border-radius: var(--radius-xs);
+  flex-shrink: 0;
+  transition: background-color 0.14s ease;
 }
 
 .dismiss-message:hover {
@@ -2620,10 +2729,14 @@ summary {
 
 .auth-messages {
   position: fixed;
-  top: 16px;
-  right: 16px;
-  max-width: 400px;
-  z-index: 40;
+  top: 66px;
+  right: 18px;
+  width: min(390px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 45;
+  pointer-events: none;
 }
 
 /* ==========================================================================
@@ -3751,10 +3864,14 @@ dialog.vac-modal-backdrop::backdrop {
   .auth-form h1 {
     font-size: 26px;
   }
+  .messages,
   .auth-messages {
-    position: static;
-    padding: 10px;
-    max-width: 100%;
+    top: 72px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+    padding: 0;
   }
   .vac-toolbar {
     flex-direction: column;
@@ -3805,6 +3922,9 @@ dialog.vac-modal-backdrop::backdrop {
   }
   .module-card:hover {
     transform: none !important;
+  }
+  .message::after {
+    display: none;
   }
 }
 

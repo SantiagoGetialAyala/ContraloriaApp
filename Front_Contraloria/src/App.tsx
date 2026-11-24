@@ -144,6 +144,7 @@ export function App() {
       <AuthPage
         setupMode={needsSetup}
         messages={messages}
+        onDismissMessage={dismissMessage}
         onAuthSuccess={handleAuthSuccess}
       />
     );
