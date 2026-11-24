@@ -70,6 +70,7 @@ export function VacationDashboardPage({
   const [initNote, setInitNote] = useState<string>('');
   const [holidayDate, setHolidayDate] = useState<string>('');
   const [holidayName, setHolidayName] = useState<string>('');
+  const [balanceQuery, setBalanceQuery] = useState<string>('');
 
   const cargarTodo = useCallback(
     async (targetYear: number, filtrosCasos: Record<string, string> = {}) => {
@@ -266,6 +267,11 @@ export function VacationDashboardPage({
 
   const handleInitialBalanceSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const persona = dashData?.employees.find((emp) => String(emp.id) === initEmpId)?.name ?? 'esta persona';
+    const confirmado = window.confirm(
+      `¿Confirma que ${persona} ya tomó ${initDays} ${initDays === 1 ? 'día' : 'días'} del periodo ${initPeriodNum}?\n\nEste registro no se puede borrar después.`,
+    );
+    if (!confirmado) return;
     setBusy(true);
     try {
       const msg = await appServices.expedientes.registrarSaldoInicialVacaciones({
@@ -323,6 +329,53 @@ export function VacationDashboardPage({
 
   const celdasMes = calendario.construirCeldasMes(year, currentMonth);
   const festivosDelAnio = calendario.listarFestivosPorAnio(year);
+
+  // Pestaña "Saldos y festivos": resumen, búsqueda y próximo festivo.
+  const limitePrescripcion = CalendarioLaboralColombia.toISO(
+    new Date(CalendarioLaboralColombia.parseISO(dashData.today).getTime() + 180 * 86_400_000),
+  );
+  const periodoPorVencer = (p: { balance: number; prescribed: boolean; prescribes_on: string }) =>
+    !p.prescribed && p.balance > 0 && p.prescribes_on <= limitePrescripcion;
+  const resumenSaldos = {
+    conSaldo: dashData.employees.filter((e) => e.total_balance > 0).length,
+    diasPendientes: dashData.employees.reduce((total, e) => total + e.total_balance, 0),
+    acumulados: dashData.employees.filter(
+      (e) => e.periods.filter((p) => p.balance > 0 && !p.prescribed).length >= 2,
+    ).length,
+    porPrescribir: dashData.employees.reduce(
+      (total, e) => total + e.periods.filter(periodoPorVencer).length,
+      0,
+    ),
+  };
+  const normalizarBusqueda = (texto: string) =>
+    texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const terminoSaldos = normalizarBusqueda(balanceQuery);
+  const empleadosFiltrados = terminoSaldos
+    ? dashData.employees.filter((e) =>
+        normalizarBusqueda(`${e.name} ${e.dept} ${e.role}`).includes(terminoSaldos),
+      )
+    : dashData.employees;
+  const anioActual = Number(dashData.today.slice(0, 4));
+  const proximoFestivo = (() => {
+    if (year < anioActual) return null;
+    const candidato =
+      year === anioActual
+        ? festivosDelAnio.find((h) => h.date >= dashData.today)
+        : festivosDelAnio[0];
+    if (!candidato) return null;
+    return { ...candidato, label: year === anioActual ? 'Próximo festivo' : 'Primer festivo del año' };
+  })();
+  const puedeEditarFestivos = ['talento', 'autoridad', 'administrador'].some((rol) =>
+    usuario.tieneRol(rol),
+  );
+  const fechaConDia = (iso: string) => {
+    const texto = new Date(`${iso}T12:00:00`).toLocaleDateString('es-CO', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  };
 
   return (
     <>
@@ -1257,199 +1310,309 @@ export function VacationDashboardPage({
 
         {/* MODO 4: SALDOS POR PERIODO Y FESTIVOS DE COLOMBIA (SECCIONES 6.3 Y 6.4) */}
         {mode === 'balances' && (
-          <div className="padded">
-            <div className="admin-layout">
-              <div>
-                <h3 style={{ marginBottom: 6 }}>Periodos causados y saldos de funcionarios</h3>
-                <p className="help" style={{ marginBottom: 14 }}>
-                  Decreto 1045 de 1978: 15 días hábiles por año de servicio, prescripción a los 4
-                  años y consumo obligatorio del periodo más antiguo disponible.
-                </p>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Funcionario</th>
-                        <th>Dependencia / Ingreso</th>
-                        <th>Periodos causados</th>
-                        <th>Saldo disponible</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dashData.employees.map((emp) => (
-                        <tr key={emp.id}>
-                          <td>
-                            <strong>{emp.name}</strong>
-                            <small>{emp.role}</small>
-                          </td>
-                          <td>
-                            {emp.dept}
-                            <small>
-                              {emp.hire_date
-                                ? `Ingreso: ${emp.hire_date}`
-                                : 'Sin fecha de ingreso'}
-                            </small>
-                          </td>
-                          <td>
-                            {emp.problem ? (
-                              <small className="muted">{emp.problem}</small>
-                            ) : emp.periods.length > 0 ? (
-                              emp.periods.map((p) => (
-                                <div key={p.number} style={{ marginBottom: 4 }}>
-                                  <span
-                                    className={`badge ${
-                                      p.prescribed
-                                        ? 'danger'
-                                        : p.balance > 0
-                                          ? 'success'
-                                          : ''
-                                    }`}
-                                  >
-                                    {p.label}: {p.balance}d disp.
-                                    {p.reserved > 0 ? ` (${p.reserved}d reserv.)` : ''}
+          <div className="padded vac-balances">
+            <p className="vac-intro">
+              Aquí puede ver cuántos días de vacaciones tiene pendientes cada funcionario y cuáles
+              son los festivos del año.
+            </p>
+
+            <div className="stats-grid overview-stats">
+              <article className="stat">
+                <div className="stat-top">
+                  <span>Personas con vacaciones pendientes</span>
+                </div>
+                <strong>{resumenSaldos.conSaldo}</strong>
+                <p>de {dashData.employees.length} funcionarios</p>
+              </article>
+              <article className="stat">
+                <div className="stat-top">
+                  <span>Días pendientes en total</span>
+                </div>
+                <strong>{resumenSaldos.diasPendientes}</strong>
+                <p>días hábiles</p>
+              </article>
+              <article className="stat">
+                <div className="stat-top">
+                  <span>Personas con más de un periodo</span>
+                </div>
+                <strong>{resumenSaldos.acumulados}</strong>
+                <p>deberían programar sus vacaciones</p>
+              </article>
+              <article className="stat">
+                <div className="stat-top">
+                  <span>Periodos que vencen pronto</span>
+                </div>
+                <strong>{resumenSaldos.porPrescribir}</strong>
+                <p>en los próximos 6 meses</p>
+              </article>
+            </div>
+
+            <div className="vac-balance-layout">
+              <section className="vac-panel">
+                <header className="vac-panel-head">
+                  <div>
+                    <h3>Vacaciones pendientes por funcionario</h3>
+                    <p>
+                      Cada año trabajado da 15 días hábiles de vacaciones. Siempre se toman primero
+                      los días del periodo más antiguo.
+                    </p>
+                  </div>
+                </header>
+
+                <div className="vac-panel-body vac-search-row">
+                  <label htmlFor="balance-search">Buscar por nombre o dependencia</label>
+                  <div className="vac-search-field">
+                    <input
+                      id="balance-search"
+                      type="search"
+                      placeholder="Escriba un nombre…"
+                      value={balanceQuery}
+                      onChange={(e) => setBalanceQuery(e.target.value)}
+                    />
+                    {balanceQuery && (
+                      <button type="button" className="btn secondary" onClick={() => setBalanceQuery('')}>
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <ul className="vac-legend-plain" aria-label="Significado de los colores">
+                  <li><span className="vac-period-chip">Verde</span> días disponibles</li>
+                  <li><span className="vac-period-chip warning">Amarillo</span> vence en menos de 6 meses</li>
+                  <li><span className="vac-period-chip danger">Rojo</span> vencido, ya no se puede tomar</li>
+                </ul>
+
+                {empleadosFiltrados.length === 0 ? (
+                  <p className="vac-panel-empty">
+                    {dashData.employees.length === 0
+                      ? 'Todavía no hay funcionarios con fecha de ingreso registrada.'
+                      : `No encontramos a nadie con «${balanceQuery}». Revise lo que escribió o pulse «Limpiar».`}
+                  </p>
+                ) : (
+                  <div className="table-wrap">
+                    <table className="vac-balance-table">
+                      <thead>
+                        <tr>
+                          <th>Funcionario</th>
+                          <th>Detalle por periodo</th>
+                          <th className="vac-num">Días pendientes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {empleadosFiltrados.map((emp) => {
+                          const pendientes = emp.periods.filter((p) => p.balance > 0);
+                          // Los vencidos se agrupan en una sola etiqueta: ya no se pueden tomar.
+                          const vencidos = pendientes.filter((p) => p.prescribed);
+                          const vigentes = pendientes.filter((p) => !p.prescribed);
+                          return (
+                            <tr key={emp.id}>
+                              <td>
+                                <strong>{emp.name}</strong>
+                                <small>{emp.dept}{emp.role ? ` · ${emp.role}` : ''}</small>
+                                {emp.hire_date && (
+                                  <small>Ingresó el {FormateadorTexto.fechaCorta(emp.hire_date)}</small>
+                                )}
+                              </td>
+                              <td>
+                                {emp.problem ? (
+                                  <span className="vac-row-note">{emp.problem}</span>
+                                ) : pendientes.length === 0 ? (
+                                  <span className="vac-row-note">
+                                    {emp.periods.length > 0
+                                      ? 'No tiene días pendientes.'
+                                      : 'Aún no ha cumplido su primer año de trabajo.'}
                                   </span>
-                                </div>
-                              ))
-                            ) : (
-                              <small className="muted">Sin periodos causados aún</small>
-                            )}
-                          </td>
-                          <td>
-                            <strong>{emp.total_balance} días hábiles</strong>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                                ) : (
+                                  <div className="vac-period-chips">
+                                    {vencidos.length > 0 && (
+                                      <span className="vac-period-chip danger">
+                                        {vencidos.length === 1
+                                          ? `Periodo ${vencidos[0].number}: vencido`
+                                          : `Periodos ${vencidos[0].number} a ${vencidos[vencidos.length - 1].number}: vencidos`}
+                                      </span>
+                                    )}
+                                    {vigentes.map((p) => (
+                                      <span
+                                        key={p.number}
+                                        className={`vac-period-chip ${periodoPorVencer(p) ? 'warning' : ''}`}
+                                      >
+                                        {`Periodo ${p.number}: ${p.balance} ${p.balance === 1 ? 'día' : 'días'}`}
+                                        {periodoPorVencer(p) && (
+                                          <em> · vence el {FormateadorTexto.fechaCorta(p.prescribes_on)}</em>
+                                        )}
+                                        {p.reserved > 0 && <em> · {p.reserved} ya solicitados</em>}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="vac-num">
+                                <strong>{emp.total_balance}</strong>
+                                <small>{emp.total_balance === 1 ? 'día' : 'días'}</small>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
 
-                <h3 style={{ marginTop: 28, marginBottom: 8 }}>
-                  Festivos de Colombia registrados ({year})
-                </h3>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Nombre del festivo registrado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {festivosDelAnio.map((h) => (
-                        <tr key={h.date}>
-                          <td>
-                            <strong>{FormateadorTexto.fechaCorta(h.date)}</strong>
-                            <small>{h.date}</small>
-                          </td>
-                          <td>{h.name}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <aside className="vac-balance-side" aria-label="Acciones de vacaciones y festivos">
+                {dashData.is_talento && (
+                  <section className="vac-panel">
+                    <header className="vac-panel-head">
+                      <div>
+                        <h3>Registrar días ya tomados</h3>
+                        <p>
+                          Use esto solo para vacaciones que la persona tomó <strong>antes</strong> de
+                          empezar a usar este sistema.
+                        </p>
+                      </div>
+                    </header>
+                    <form
+                      className="vac-panel-body vac-compact-form"
+                      onSubmit={handleInitialBalanceSubmit}
+                      aria-busy={busy}
+                    >
+                      <div className="field">
+                        <label htmlFor="init-emp">Funcionario</label>
+                        <select
+                          id="init-emp"
+                          value={initEmpId}
+                          onChange={(e) => setInitEmpId(e.target.value)}
+                          required
+                        >
+                          {dashData.employees.map((emp) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name} ({emp.dept})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="vac-form-row">
+                        <div className="field">
+                          <label htmlFor="init-period">Número del periodo</label>
+                          <input
+                            id="init-period"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={40}
+                            required
+                            aria-describedby="init-period-help"
+                            value={initPeriodNum}
+                            onChange={(e) => setInitPeriodNum(Number(e.target.value))}
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor="init-days">Días que ya tomó</label>
+                          <input
+                            id="init-days"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={15}
+                            required
+                            value={initDays}
+                            onChange={(e) => setInitDays(Number(e.target.value))}
+                          />
+                        </div>
+                      </div>
+                      <p className="vac-help" id="init-period-help">
+                        El periodo 1 es el primer año de trabajo, el 2 el segundo año, y así.
+                      </p>
+                      <div className="field">
+                        <label htmlFor="init-note">¿De dónde sale este dato?</label>
+                        <textarea
+                          id="init-note"
+                          rows={2}
+                          required
+                          placeholder="Ejemplo: Resolución 042 de 2025"
+                          value={initNote}
+                          onChange={(e) => setInitNote(e.target.value)}
+                        />
+                      </div>
+                      <button className="btn primary full" type="submit" disabled={busy}>
+                        Guardar días tomados
+                      </button>
+                    </form>
+                  </section>
+                )}
 
-              {/*Formularios de Talento Humano: Saldos iniciales y Festivos */}
-              <div>
-                <section className="card" style={{ marginBottom: 18 }}>
-                  <header className="card-heading">
+                <section className="vac-panel">
+                  <header className="vac-panel-head">
                     <div>
-                      <h2>Registrar saldo inicial</h2>
-                      <p>Descuenta días ya disfrutados antes de usar el sistema.</p>
+                      <h3>Festivos de {year}</h3>
+                      <p>Estos días no se cuentan como días de vacaciones.</p>
                     </div>
                   </header>
-                  <form className="card-body" onSubmit={handleInitialBalanceSubmit} aria-busy={busy}>
-                    <div className="field">
-                      <label htmlFor="init-emp">Funcionario</label>
-                      <select
-                        id="init-emp"
-                        value={initEmpId}
-                        onChange={(e) => setInitEmpId(e.target.value)}
-                        required
-                      >
-                        {dashData.employees.map((emp) => (
-                          <option key={emp.id} value={emp.id}>
-                            {emp.name} · {emp.dept}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label htmlFor="init-period">Número de periodo causado</label>
-                      <input
-                        id="init-period"
-                        type="number"
-                        min={1}
-                        max={40}
-                        required
-                        value={initPeriodNum}
-                        onChange={(e) => setInitPeriodNum(Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="init-days">Días hábiles ya disfrutados (1–15)</label>
-                      <input
-                        id="init-days"
-                        type="number"
-                        min={1}
-                        max={15}
-                        required
-                        value={initDays}
-                        onChange={(e) => setInitDays(Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="init-note">Fuente documental (resolución u hoja de vida)</label>
-                      <textarea
-                        id="init-note"
-                        rows={2}
-                        required
-                        placeholder="Ej. Resolución 042 de 2025 · disfrutar 10 días del Periodo 1"
-                        value={initNote}
-                        onChange={(e) => setInitNote(e.target.value)}
-                      />
-                    </div>
-                    <button className="btn primary full" type="submit" disabled={busy}>
-                      Registrar saldo inicial →
-                    </button>
-                  </form>
+                  <div className="vac-panel-body">
+                    {proximoFestivo ? (
+                      <div className="vac-next-holiday">
+                        <span>{proximoFestivo.label}</span>
+                        <strong>{fechaConDia(proximoFestivo.date)}</strong>
+                        <small>{proximoFestivo.name}</small>
+                      </div>
+                    ) : (
+                      <p className="vac-row-note vac-holiday-empty">
+                        {festivosDelAnio.length === 0
+                          ? `No hay festivos guardados para ${year}. Sin ellos el sistema no puede calcular vacaciones de ese año. Avise a Talento Humano.`
+                          : 'Ya pasaron todos los festivos de este año.'}
+                      </p>
+                    )}
+                    {festivosDelAnio.length > 0 && (
+                      <details className="vac-disclosure">
+                        <summary>Ver todos los festivos del año ({festivosDelAnio.length})</summary>
+                        <ul className="vac-holiday-list">
+                          {festivosDelAnio.map((h) => (
+                            <li key={h.date} className={h.date < dashData.today ? 'past' : ''}>
+                              <time dateTime={h.date}>{fechaConDia(h.date)}</time>
+                              <span>
+                                {h.name}
+                                {h.date < dashData.today && <em> (ya pasó)</em>}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                    {puedeEditarFestivos && (
+                      <details className="vac-disclosure">
+                        <summary>Agregar o corregir un festivo</summary>
+                        <form className="vac-compact-form" onSubmit={handleSaveHolidaySubmit} aria-busy={busy}>
+                          <div className="field">
+                            <label htmlFor="hol-date">Fecha del festivo</label>
+                            <input
+                              id="hol-date"
+                              type="date"
+                              required
+                              value={holidayDate}
+                              onChange={(e) => setHolidayDate(e.target.value)}
+                            />
+                          </div>
+                          <div className="field">
+                            <label htmlFor="hol-name">Nombre del festivo</label>
+                            <input
+                              id="hol-name"
+                              type="text"
+                              required
+                              placeholder="Ejemplo: Día cívico municipal"
+                              value={holidayName}
+                              onChange={(e) => setHolidayName(e.target.value)}
+                            />
+                          </div>
+                          <button className="btn secondary full" type="submit" disabled={busy}>
+                            Guardar festivo
+                          </button>
+                        </form>
+                      </details>
+                    )}
+                  </div>
                 </section>
-
-                <section className="card">
-                  <header className="card-heading">
-                    <div>
-                      <h2>Agregar o corregir festivo</h2>
-                      <p>Se descuenta automáticamente del conteo de días hábiles.</p>
-                    </div>
-                  </header>
-                  <form className="card-body" onSubmit={handleSaveHolidaySubmit} aria-busy={busy}>
-                    <div className="field">
-                      <label htmlFor="hol-date">Fecha del festivo</label>
-                      <input
-                        id="hol-date"
-                        type="date"
-                        required
-                        value={holidayDate}
-                        onChange={(e) => setHolidayDate(e.target.value)}
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="hol-name">Nombre de la festividad</label>
-                      <input
-                        id="hol-name"
-                        type="text"
-                        required
-                        placeholder="Ej. Día cívico municipal"
-                        value={holidayName}
-                        onChange={(e) => setHolidayName(e.target.value)}
-                      />
-                    </div>
-                    <button className="btn secondary full" type="submit" disabled={busy}>
-                      Guardar festivo →
-                    </button>
-                  </form>
-                </section>
-              </div>
+              </aside>
             </div>
           </div>
         )}
