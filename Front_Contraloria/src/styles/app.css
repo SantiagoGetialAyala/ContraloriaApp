@@ -3545,6 +3545,408 @@ dialog.vac-modal-backdrop::backdrop {
   display: none;
 }
 
+/* --- Vacaciones · pestaña "Saldos y festivos" ---
+   Pensada para personas poco familiarizadas con la tecnología: letra de al menos 14 px,
+   controles de 44 px de alto, textos en lenguaje sencillo y colores siempre acompañados de palabras. */
+.vac-balances {
+  font-size: 14px;
+}
+
+.vac-intro {
+  margin: 0 0 16px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.vac-balances .overview-stats {
+  margin-bottom: 20px;
+}
+
+.vac-balances .overview-stats .stat {
+  padding: 16px 20px;
+}
+
+.vac-balances .overview-stats .stat-top {
+  font-size: 13px;
+}
+
+.vac-balances .overview-stats .stat > strong {
+  font-size: 30px;
+  margin: 4px 0 2px;
+}
+
+.vac-balances .overview-stats .stat > p {
+  font-size: 13px;
+}
+
+.vac-balance-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.vac-balance-side {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+
+.vac-panel {
+  background: var(--surface);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.vac-panel-head {
+  padding: 18px 20px 12px;
+}
+
+.vac-panel-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.vac-panel-head p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.vac-panel-body {
+  padding: 0 20px 18px;
+}
+
+.vac-search-row > label {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--font-label);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.vac-search-field {
+  display: flex;
+  gap: 10px;
+  max-width: 520px;
+}
+
+.vac-search-field input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.vac-balances input,
+.vac-balances select,
+.vac-balances textarea {
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.vac-balances .btn {
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.vac-balances .field > label {
+  font-size: 14px;
+}
+
+.vac-legend-plain {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-subtle);
+  list-style: none;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.vac-legend-plain li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vac-panel-empty {
+  margin: 0;
+  padding: 16px 20px 24px;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.vac-balance-table th {
+  font-size: 13px;
+}
+
+.vac-balance-table td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  font-size: 14px;
+}
+
+.vac-balance-table td > small {
+  font-size: 13px;
+}
+
+/* Nombre legible en una o dos líneas; el detalle usa el resto del ancho. */
+.vac-balance-table td:first-child {
+  min-width: 200px;
+}
+
+.vac-balance-table .vac-num {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.vac-balance-table td.vac-num strong {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vac-row-note {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.vac-period-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vac-period-chip {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: 4px 10px;
+  border: 1px solid var(--status-success-border);
+  border-radius: var(--radius-xs);
+  background: var(--status-success-bg);
+  color: var(--status-success-fg);
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.vac-period-chip em {
+  font-style: normal;
+  font-weight: 500;
+}
+
+.vac-period-chip.warning {
+  border-color: var(--status-warning-border);
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
+}
+
+.vac-period-chip.danger {
+  border-color: var(--status-error-border);
+  background: var(--status-error-bg);
+  color: var(--status-error-fg);
+}
+
+.vac-next-holiday {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+}
+
+.vac-next-holiday span {
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.vac-next-holiday strong {
+  font-family: var(--font-heading);
+  font-size: 19px;
+  color: var(--text-primary);
+}
+
+.vac-next-holiday small {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.vac-holiday-empty {
+  display: block;
+  margin: 0 0 10px;
+}
+
+.vac-help {
+  margin: -4px 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* Los desplegables se ven como botones para que se entienda que se pueden abrir. */
+.vac-disclosure {
+  margin-top: 10px;
+}
+
+.vac-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  list-style: none;
+  font-family: var(--font-label);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--link);
+}
+
+.vac-disclosure > summary:hover {
+  background: var(--surface-hover);
+}
+
+.vac-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.vac-disclosure > summary::after {
+  content: '▾';
+  font-size: 16px;
+  transition: transform 0.15s ease;
+}
+
+.vac-disclosure[open] > summary {
+  margin-bottom: 10px;
+}
+
+.vac-disclosure[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.vac-holiday-list {
+  display: grid;
+  max-height: 340px;
+  margin: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.vac-holiday-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.vac-holiday-list li:last-child {
+  border-bottom: 0;
+}
+
+.vac-holiday-list time {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.vac-holiday-list em {
+  font-style: normal;
+}
+
+.vac-holiday-list li.past,
+.vac-holiday-list li.past time {
+  color: var(--text-muted);
+}
+
+.vac-compact-form .field {
+  margin-bottom: 14px;
+}
+
+.vac-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 1200px) {
+  .vac-balance-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vac-balance-side {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .vac-search-field {
+    max-width: none;
+  }
+  /* En el celular cada funcionario se muestra como tarjeta en lugar de fila de tabla. */
+  .vac-balance-table,
+  .vac-balance-table tbody {
+    display: block;
+  }
+  .vac-balance-table thead {
+    display: none;
+  }
+  .vac-balance-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .vac-balance-table tr:last-child {
+    border-bottom: 0;
+  }
+  .vac-balance-table td {
+    display: block;
+    max-width: none;
+    padding: 0;
+    border: 0;
+  }
+  .vac-balance-table td:first-child {
+    min-width: 0;
+  }
+  .vac-balance-table td:nth-child(2) {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+  }
+  .vac-balance-table td.vac-num {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    width: auto;
+  }
+  .vac-form-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vac-disclosure > summary::after {
+    transition: none;
+  }
+}
+
 /* ==========================================================================
    DISEÑO RESPONSIVE
    ========================================================================== */
