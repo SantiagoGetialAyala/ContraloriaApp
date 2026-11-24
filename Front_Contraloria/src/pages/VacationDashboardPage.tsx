@@ -393,6 +393,9 @@ export function VacationDashboardPage({
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <AppLink className="btn secondary" to={`/vacaciones/historial/${usuario.id}`}>
+            Mi historial de vacaciones
+          </AppLink>
           <button type="button" className="btn secondary" onClick={abrirSimulador}>
             ◷ Simular fechas y cruces
           </button>
@@ -1413,6 +1416,9 @@ export function VacationDashboardPage({
                                 {emp.hire_date && (
                                   <small>Ingresó el {FormateadorTexto.fechaCorta(emp.hire_date)}</small>
                                 )}
+                                <AppLink className="text-link vac-row-history" to={`/vacaciones/historial/${emp.id}`}>
+                                  Ver historial
+                                </AppLink>
                               </td>
                               <td>
                                 {emp.problem ? (

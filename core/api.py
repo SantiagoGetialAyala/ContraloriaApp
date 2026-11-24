@@ -302,6 +302,7 @@ class CaseSerializer:
             except ValidationError as exc:
                 problem = ' '.join(exc.messages)
             can_interrupt = services.can_interrupt_vacation(user, case)
+            suspension_desde = vacations.fecha_minima_suspension(case).isoformat() if can_interrupt else None
             interruption_docs = []
             if can_interrupt:
                 interruption_docs = [
@@ -325,6 +326,8 @@ class CaseSerializer:
                 ],
                 'can_interrupt': can_interrupt,
                 'interruption_documents': interruption_docs,
+                'suspension_desde': suspension_desde,
+                'owner_id': case.owner_id,
             }
 
         events_qs = case.events.select_related('actor').order_by('-created_at', '-id')
@@ -719,13 +722,26 @@ class CaseModuleApiView(BaseApiView):
         if kind not in WORKFLOWS:
             raise Http404
 
+    @staticmethod
+    def dias_sugeridos(user):
+        """Días que propone el formulario: lo disponible en el periodo más antiguo, máximo 15."""
+        try:
+            for row in vacations.period_summary(user):
+                libres = row['balance'] - row['reserved']
+                if libres > 0 and not row['prescribed']:
+                    return min(vacations.DAYS_PER_PERIOD, libres)
+        except ValidationError:
+            pass
+        return vacations.DAYS_PER_PERIOD
+
     def get(self, request, kind):
         self.validate_kind(kind)
         if request.GET.get('schema') == '1':
+            initial = {'business_days': self.dias_sugeridos(request.user)} if kind == 'vacaciones' else None
             return self.json_success({
                 'kind': kind,
                 'title': self.CREATE_TITLES[kind],
-                'fields_schema': FieldSchemaBuilder.build(BASE_FIELDS[kind]),
+                'fields_schema': FieldSchemaBuilder.build(BASE_FIELDS[kind], initial),
             })
         queryset = filtered_cases(request, kind)
         page_obj = Paginator(queryset, 15).get_page(request.GET.get('page'))
@@ -895,25 +911,54 @@ class CaseVacationInterruptionApiView(BaseApiView):
         case = get_case(request.user, case_id)
         self.current_case = case
         body = self.parse_body(request)
-        form = VacationInterruptionForm(body, case=case)
+        form = VacationInterruptionForm(body, request.FILES, case=case)
         if not form.is_valid():
             errors, field_errors = self.format_form_errors(form)
-            record_failure(request, ValidationError('Novedad de vacaciones rechazada: ' + ', '.join(form.errors)), case)
+            record_failure(request, ValidationError('Suspensión de vacaciones rechazada: ' + ', '.join(form.errors)), case)
             return self.json_error(errors, field_errors, status=400)
         d = form.cleaned_data
-        updated = services.interrupt_vacation(
-            request.user,
-            case.pk,
-            d['revision'],
-            d['kind'],
-            d['on_date'],
-            d['reason'],
-            d['document_id'].pk,
-        )
+        if d.get('file'):
+            updated = services.suspend_vacation_with_file(
+                request.user, case.pk, d['revision'], d['on_date'], d['reason'], d['file'], d['acto_numero'], d['acto_fecha'],
+            )
+        else:
+            updated = services.interrupt_vacation(
+                request.user, case.pk, d['revision'], 'suspension', d['on_date'], d['reason'], d['document_id'].pk,
+                d['acto_numero'], d['acto_fecha'],
+            )
         return self.json_success(
             CaseSerializer.serialize_detail(request, updated),
-            message='Novedad registrada. Los días no disfrutados quedaron devueltos al periodo.',
+            message='Vacaciones suspendidas. Los días no disfrutados volvieron al periodo.',
         )
+
+
+class VacationHistoryApiView(BaseApiView):
+    """Historial de vacaciones de un funcionario: periodos, salidas, suspensiones y días pendientes."""
+
+    def get(self, request, user_id):
+        employee = get_object_or_404(User.objects.select_related('profile'), pk=user_id)
+        if not vacations.puede_ver_historial(request.user, employee):
+            raise PermissionDenied('Solo el funcionario, su jefe y Talento Humano pueden ver este historial.')
+        profile = getattr(employee, 'profile', None)
+        try:
+            periodos = vacations.historial(employee)
+            problema = ''
+        except ValidationError as exc:
+            periodos, problema = [], ' '.join(exc.messages)
+        return self.json_success({
+            'persona': {
+                'id': employee.pk,
+                'nombre': employee.get_full_name() or employee.username,
+                'dependencia': profile.department if profile else '',
+                'cargo': profile.cargo if profile else '',
+                'ingreso': profile.hire_date.isoformat() if profile and profile.hire_date else '',
+            },
+            'hoy': timezone.localdate().isoformat(),
+            'minimo_primera_salida': vacations.DIAS_MINIMOS_PRIMERA_SALIDA,
+            'problema': problema,
+            'periodos': periodos,
+            'pendientes_total': sum(p['pendientes'] for p in periodos if not p['prescrito']),
+        })
 
 
 class VacationPreviewApiView(BaseApiView):

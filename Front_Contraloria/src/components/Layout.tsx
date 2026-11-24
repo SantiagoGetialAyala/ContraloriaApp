@@ -37,7 +37,7 @@ export function Layout({ usuario, route, activeCaseKind, messages, onDismissMess
   const isModuleActive = (kind: CaseKind) =>
     (route.name === 'case_detail' && activeCaseKind === kind) ||
     ((route.name === 'case_list' || route.name === 'case_create') && route.kind === kind) ||
-    (kind === 'vacaciones' && route.name === 'vacation_calendar') ||
+    (kind === 'vacaciones' && (route.name === 'vacation_calendar' || route.name === 'vacation_history')) ||
     (kind === 'compensatorio' && route.name === 'compensatory_calendar');
   const closeSidebar = () => setSidebarOpen(false);
 
@@ -59,7 +59,7 @@ export function Layout({ usuario, route, activeCaseKind, messages, onDismissMess
       hojas_de_vida: 'Hojas de vida', hoja_de_vida_detail: 'Hoja de vida',
       procedure: 'Procedimientos', configuration: 'Parámetros y normativa',
       audit: 'Auditoría', password_change: 'Cambiar contraseña',
-      vacation_calendar: 'Calendario de vacaciones', compensatory_calendar: 'Calendario de compensatorios',
+      vacation_calendar: 'Calendario de vacaciones', vacation_history: 'Historial de vacaciones', compensatory_calendar: 'Calendario de compensatorios',
       case_detail: 'Expediente', case_create: 'Nueva solicitud',
     };
     const title = route.name === 'case_list' ? modules.find((m) => m.kind === route.kind)?.label : titles[route.name];

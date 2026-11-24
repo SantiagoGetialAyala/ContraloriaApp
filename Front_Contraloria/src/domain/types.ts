@@ -176,6 +176,9 @@ export interface VacationDetailDTO {
   entries: VacationLedgerEntryDTO[];
   can_interrupt: boolean;
   interruption_documents: Array<{ id: number; label: string }>;
+  /** Primer día desde el que se puede suspender (después de 5 días hábiles disfrutados del periodo). */
+  suspension_desde: string | null;
+  owner_id: number;
 }
 
 export interface EventItemDTO {
@@ -496,4 +499,49 @@ export interface HojaDeVidaDetailDTO {
   available_roles: Array<[string, string]>;
   employments: Array<[string, string]>;
   document_categories: Array<[string, string]>;
+}
+
+// --- Historial de vacaciones por funcionario --------------------------------------------------
+
+export interface EventoHistorialVacacionesDTO {
+  tipo: 'carga_inicial' | 'salida' | 'suspension' | 'en_tramite';
+  fecha: string | null;
+  fecha_fin?: string | null;
+  dias: number;
+  nota?: string;
+  case_id?: string;
+  referencia?: string;
+  etapa?: string;
+  suspendida?: boolean;
+  en_curso?: boolean;
+  futura?: boolean;
+  motivo?: string;
+  acto_numero?: string;
+  acto_fecha?: string;
+  documento_url?: string;
+}
+
+export interface PeriodoHistorialDTO {
+  numero: number;
+  etiqueta: string;
+  desde: string;
+  hasta: string;
+  dias_del_periodo: number;
+  pendientes: number;
+  tomados: number;
+  reservados: number;
+  plazo: string | null;
+  plazo_vencido: boolean;
+  prescrito: boolean;
+  prescribe: string;
+  eventos: EventoHistorialVacacionesDTO[];
+}
+
+export interface HistorialVacacionesDTO {
+  persona: { id: number; nombre: string; dependencia: string; cargo: string; ingreso: string };
+  hoy: string;
+  minimo_primera_salida: number;
+  problema: string;
+  periodos: PeriodoHistorialDTO[];
+  pendientes_total: number;
 }

@@ -177,12 +177,20 @@ class RecognitionForm(forms.Form):
 
 class VacationInterruptionForm(forms.Form):
     revision = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
-    kind = forms.ChoiceField(label='Novedad', choices=[('suspension', 'Suspensión (durante el disfrute)'), ('aplazamiento', 'Aplazamiento (antes de iniciar)')])
-    on_date = forms.DateField(label='Fecha desde la cual no se disfrutan los días', widget=forms.DateInput(attrs={'type': 'date'}))
-    reason = forms.CharField(label='Motivo y acto que la soporta', max_length=5000, widget=forms.Textarea(attrs={'rows': 3}))
-    document_id = forms.ModelChoiceField(label='Soporte de la novedad', queryset=None)
+    on_date = forms.DateField(label='¿Desde qué día se suspenden?', widget=forms.DateInput(attrs={'type': 'date'}))
+    acto_numero = forms.CharField(label='Número de la resolución de suspensión', max_length=80)
+    acto_fecha = forms.DateField(label='Fecha de la resolución', widget=forms.DateInput(attrs={'type': 'date'}))
+    reason = forms.CharField(label='Motivo de la suspensión', max_length=5000, widget=forms.Textarea(attrs={'rows': 3}))
+    file = forms.FileField(label='Resolución (PDF, JPG o PNG)', required=False)
+    document_id = forms.ModelChoiceField(label='O una resolución ya adjunta', queryset=None, required=False)
 
     def __init__(self, *args, case, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['document_id'].queryset = case.documents.filter(category='novedad_vacaciones').defer('content')
         self.fields['document_id'].label_from_instance = lambda d: f'{d.name} · {d.created_at:%d/%m/%Y %H:%M}'
+
+    def clean(self):
+        data = super().clean()
+        if not data.get('file') and not data.get('document_id'):
+            raise ValidationError('Adjunte la resolución que ordena la suspensión.')
+        return data
