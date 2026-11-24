@@ -1,0 +1,531 @@
+/* ==========================================================================
+   SISTEMA DE DISEÑO INSTITUCIONAL · CONTRALORÍA MUNICIPAL DE PASTO
+   Fuente única de verdad para color, escalas tonales (50-900), tipografía,
+   degradados translúcidos y accesibilidad WCAG 2.1 AA / AAA.
+
+   Paleta oficial base:
+   - Primary   : #085066 (cian petróleo profundo)
+   - Secondary : #E05A47 (coral suave)
+   - Tertiary  : #D99B26 (ámbar dorado)
+   - Neutral   : #0F2830 (azul petróleo muy oscuro)
+   - Ref. Claro: #D6F0FA (celeste institucional suave)
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* --- Escala tonal Primary (base #085066) --- */
+  --primary-50: #EAF7FC;
+  --primary-100: #D6F0FA;
+  --primary-200: #AEE0F2;
+  --primary-300: #78C7E2;
+  --primary-400: #3CA4C6;
+  --primary-500: #167B9B;
+  --primary-600: #0D647F;
+  --primary-700: #085066;
+  --primary-800: #063C4D;
+  --primary-900: #042733;
+
+  /* --- Escala tonal Secondary (base #E05A47) --- */
+  --secondary-50: #FDF1EF;
+  --secondary-100: #FADCD7;
+  --secondary-200: #F5B9AF;
+  --secondary-300: #EE9183;
+  --secondary-400: #E77463;
+  --secondary-500: #E05A47;
+  --secondary-600: #C44331;
+  --secondary-700: #A43222;
+  --secondary-800: #822518;
+  --secondary-900: #5C1910;
+
+  /* --- Escala tonal Tertiary (base #D99B26) --- */
+  --tertiary-50: #FCF6E8;
+  --tertiary-100: #F7E9C8;
+  --tertiary-200: #EED291;
+  --tertiary-300: #E4B858;
+  --tertiary-400: #D99B26;
+  --tertiary-500: #BA8017;
+  --tertiary-600: #98660E;
+  --tertiary-700: #784F08;
+  --tertiary-800: #593A05;
+  --tertiary-900: #3D2703;
+
+  /* --- Escala tonal Neutral (base #0F2830) --- */
+  --neutral-0: #FFFFFF;
+  --neutral-50: #F2F8FA;
+  --neutral-100: #E3EFF3;
+  --neutral-200: #C6DCE3;
+  --neutral-300: #9EBCC6;
+  --neutral-400: #6E919D;
+  --neutral-500: #496B76;
+  --neutral-600: #34515B;
+  --neutral-700: #213B44;
+  --neutral-800: #15313A;
+  --neutral-900: #0F2830;
+  --neutral-950: #08181E;
+
+  /* --- Tipografía oficial --- */
+  --font-heading: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-label: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  /* --- Geometría y elevación --- */
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* ========================================================================
+     TOKENS SEMÁNTICOS · MODO CLARO
+     ======================================================================== */
+
+  /* Lienzo y atmósfera (degradados suaves translúcidos con ámbar protagonista) */
+  --bg-canvas: #EBF6FB;
+  --bg-canvas-gradient:
+    radial-gradient(64rem 42rem at 92% -4%, rgba(217, 155, 38, 0.16) 0%, rgba(217, 155, 38, 0.04) 44%, transparent 72%),
+    radial-gradient(56rem 38rem at 14% 6%, rgba(214, 240, 250, 0.92) 0%, rgba(214, 240, 250, 0.25) 56%, transparent 78%),
+    radial-gradient(46rem 32rem at 26% 100%, rgba(217, 155, 38, 0.10) 0%, rgba(224, 90, 71, 0.035) 45%, transparent 74%),
+    linear-gradient(180deg, #E3F4FC 0%, #EEF8FC 48%, #F4FAFD 100%);
+
+  /* Superficies */
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-solid: var(--neutral-0);
+  --surface-elevated: rgba(255, 255, 255, 0.97);
+  --surface-translucent: rgba(244, 250, 253, 0.80);
+  --surface-subtle: var(--primary-50);
+  --surface-muted: var(--neutral-100);
+  --surface-hover: #E1F2FA;
+  --surface-input: rgba(255, 255, 255, 0.94);
+  --surface-input-subtle: rgba(234, 247, 252, 0.68);
+  --surface-backdrop: rgba(15, 40, 48, 0.48);
+
+  /* Superficies con degradados translúcidos suaves */
+  --surface-tint-primary:
+    linear-gradient(135deg, rgba(214, 240, 250, 0.72) 0%, rgba(234, 247, 252, 0.90) 62%, rgba(217, 155, 38, 0.12) 100%);
+  --surface-tint-secondary:
+    linear-gradient(135deg, rgba(234, 247, 252, 0.88) 0%, rgba(242, 248, 250, 0.92) 60%, rgba(224, 90, 71, 0.09) 100%);
+  --surface-tint-amber:
+    linear-gradient(135deg, rgba(252, 246, 232, 0.94) 0%, rgba(247, 233, 200, 0.52) 52%, rgba(214, 240, 250, 0.42) 100%);
+  --surface-toolbar:
+    linear-gradient(90deg, rgba(234, 247, 252, 0.85) 0%, rgba(255, 255, 255, 0.92) 55%, rgba(252, 246, 232, 0.65) 100%);
+  --surface-topbar:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.84) 0%, rgba(234, 247, 252, 0.82) 68%, rgba(252, 246, 232, 0.72) 100%);
+
+  /* Texto */
+  --text-primary: var(--neutral-900);
+  --text-secondary: var(--neutral-600);
+  --text-muted: var(--neutral-500);
+  --text-inverse: var(--neutral-0);
+
+  /* Bordes (control ≥ 3:1 WCAG AA UI) */
+  --border-subtle: rgba(158, 188, 198, 0.52);
+  --border-card: rgba(110, 145, 157, 0.28);
+  --border-control: var(--neutral-400);
+  --border-strong: var(--neutral-500);
+
+  /* Enlaces y foco */
+  --link: var(--primary-700);
+  --link-hover: var(--primary-800);
+  --focus-ring: var(--primary-500);
+  --focus-halo: rgba(22, 123, 155, 0.24);
+
+  /* Acentos de marca */
+  --brand-primary: var(--primary-700);
+  --brand-primary-strong: var(--primary-800);
+  --brand-primary-soft: var(--primary-100);
+  --brand-secondary: var(--secondary-500);
+  --brand-tertiary: var(--tertiary-400);
+  --brand-tertiary-text: var(--tertiary-700);
+
+  /* Botones (Primary, Secondary, Inverted, Outlined, Danger) */
+  --btn-primary-bg: linear-gradient(135deg, #085066 0%, #0D647F 100%);
+  --btn-primary-bg-hover: linear-gradient(135deg, #063C4D 0%, #085066 100%);
+  --btn-primary-fg: var(--neutral-0);
+  --btn-primary-border: var(--primary-700);
+
+  --btn-secondary-bg: rgba(214, 240, 250, 0.62);
+  --btn-secondary-bg-hover: rgba(174, 224, 242, 0.78);
+  --btn-secondary-fg: var(--primary-800);
+  --btn-secondary-border: rgba(8, 80, 102, 0.22);
+
+  --btn-inverted-bg: var(--neutral-900);
+  --btn-inverted-bg-hover: var(--neutral-700);
+  --btn-inverted-fg: var(--neutral-0);
+  --btn-inverted-border: var(--neutral-900);
+
+  --btn-outlined-bg: rgba(255, 255, 255, 0.72);
+  --btn-outlined-bg-hover: rgba(214, 240, 250, 0.62);
+  --btn-outlined-fg: var(--neutral-900);
+  --btn-outlined-border: var(--neutral-400);
+
+  --btn-danger-bg: var(--secondary-50);
+  --btn-danger-bg-hover: var(--secondary-100);
+  --btn-danger-fg: var(--secondary-700);
+  --btn-danger-border: var(--secondary-300);
+  --btn-danger-solid-bg: linear-gradient(135deg, #A43222 0%, #C44331 100%);
+  --btn-danger-solid-hover: linear-gradient(135deg, #822518 0%, #A43222 100%);
+  --btn-danger-solid-fg: var(--neutral-0);
+
+  /* Estados semánticos derivados estrictamente de la paleta */
+  --status-neutral-bg: var(--neutral-100);
+  --status-neutral-fg: var(--neutral-700);
+  --status-neutral-border: var(--neutral-200);
+
+  --status-success-bg: var(--primary-50);
+  --status-success-fg: var(--primary-700);
+  --status-success-border: var(--primary-300);
+  --status-success-dot: var(--primary-600);
+
+  --status-info-bg: var(--primary-100);
+  --status-info-fg: var(--primary-800);
+  --status-info-border: var(--primary-400);
+  --status-info-dot: var(--primary-500);
+
+  --status-warning-bg: var(--tertiary-50);
+  --status-warning-fg: var(--tertiary-700);
+  --status-warning-border: var(--tertiary-300);
+  --status-warning-dot: var(--tertiary-600);
+
+  --status-error-bg: var(--secondary-50);
+  --status-error-fg: var(--secondary-700);
+  --status-error-border: var(--secondary-300);
+  --status-error-dot: var(--secondary-600);
+
+  /* Navegación lateral y panel narrativo de acceso (oscuro institucional con halo ámbar) */
+  --sidebar-bg:
+    radial-gradient(28rem 22rem at 92% 6%, rgba(217, 155, 38, 0.20) 0%, rgba(217, 155, 38, 0.04) 48%, transparent 72%),
+    radial-gradient(26rem 24rem at 10% 96%, rgba(13, 100, 127, 0.34) 0%, transparent 70%),
+    linear-gradient(176deg, #0F2830 0%, #0A3442 54%, #085066 100%);
+  --sidebar-text: var(--primary-50);
+  --sidebar-text-muted: var(--primary-200);
+  --sidebar-icon: var(--primary-200);
+  --sidebar-border: rgba(174, 224, 242, 0.16);
+  --sidebar-item-hover: rgba(214, 240, 250, 0.12);
+  --sidebar-item-active-bg: linear-gradient(95deg, #D6F0FA 0%, #EAF7FC 72%, #F7E9C8 100%);
+  --sidebar-item-active-fg: var(--neutral-900);
+  --sidebar-brand-border: rgba(217, 155, 38, 0.62);
+  --sidebar-brand-bg: rgba(217, 155, 38, 0.12);
+  --sidebar-brand-fg: var(--tertiary-100);
+  --sidebar-accent-warm: var(--tertiary-300);
+  --sidebar-avatar-bg: rgba(214, 240, 250, 0.14);
+  --sidebar-avatar-fg: var(--primary-50);
+  --sidebar-ring: rgba(217, 155, 38, 0.18);
+
+  /* Barras de progreso (las 3 escalas de la paleta) */
+  --progress-track: var(--primary-100);
+  --progress-primary: linear-gradient(90deg, var(--primary-700) 0%, var(--primary-500) 100%);
+  --progress-secondary: linear-gradient(90deg, var(--secondary-700) 0%, var(--secondary-500) 100%);
+  --progress-tertiary: linear-gradient(90deg, var(--tertiary-700) 0%, var(--tertiary-400) 100%);
+
+  /* Calendario y Gantt de Vacaciones */
+  --cal-outside-bg: rgba(227, 239, 243, 0.48);
+  --cal-weekend-bg: rgba(234, 247, 252, 0.62);
+  --cal-holiday-bg: rgba(253, 241, 239, 0.85);
+  --cal-pill-selected-bg: linear-gradient(135deg, var(--primary-700) 0%, var(--primary-600) 100%);
+  --cal-pill-selected-fg: var(--neutral-0);
+  --cal-pill-selected-border: var(--primary-800);
+  --cal-pill-conflict-strong-bg: var(--secondary-700);
+  --cal-pill-conflict-strong-fg: var(--neutral-0);
+  --cal-pill-conflict-strong-border: var(--secondary-800);
+  --cal-pill-conflict-other-bar-bg: var(--tertiary-700);
+  --cal-pill-conflict-other-bar-fg: var(--neutral-0);
+  --cal-pill-conflict-other-bar-border: var(--tertiary-800);
+  --cal-row-assigned-bg: linear-gradient(90deg, rgba(214, 240, 250, 0.55) 0%, rgba(252, 246, 232, 0.45) 100%);
+
+  /* Sombras suaves con tinte petróleo */
+  --shadow-xs: 0 1px 2px rgba(15, 40, 48, 0.05);
+  --shadow-sm: 0 2px 8px rgba(15, 40, 48, 0.06), 0 1px 2px rgba(8, 80, 102, 0.04);
+  --shadow-md: 0 12px 32px rgba(15, 40, 48, 0.11), 0 2px 6px rgba(8, 80, 102, 0.06);
+  --shadow-lg: 0 22px 48px rgba(15, 40, 48, 0.22);
+
+  /* Alias de compatibilidad semántica */
+  --shadow: var(--shadow-sm);
+}
+
+/* ==========================================================================
+   TOKENS SEMÁNTICOS · MODO OSCURO
+   Aplica cuando `data-theme="dark"` o por preferencia del sistema si no hay
+   elección manual en `data-theme="light"`.
+   ========================================================================== */
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-canvas: var(--neutral-950);
+  --bg-canvas-gradient:
+    radial-gradient(64rem 42rem at 92% -4%, rgba(217, 155, 38, 0.13) 0%, rgba(217, 155, 38, 0.03) 45%, transparent 72%),
+    radial-gradient(56rem 40rem at 14% 8%, rgba(8, 80, 102, 0.34) 0%, rgba(8, 80, 102, 0.08) 54%, transparent 78%),
+    radial-gradient(44rem 30rem at 24% 100%, rgba(224, 90, 71, 0.07) 0%, rgba(217, 155, 38, 0.06) 44%, transparent 74%),
+    linear-gradient(180deg, #07151A 0%, #08181E 50%, #0A1D24 100%);
+
+  --surface: rgba(15, 40, 48, 0.90);
+  --surface-solid: var(--neutral-900);
+  --surface-elevated: rgba(21, 49, 58, 0.96);
+  --surface-translucent: rgba(15, 40, 48, 0.84);
+  --surface-subtle: var(--neutral-800);
+  --surface-muted: #1A3943;
+  --surface-hover: #1E424D;
+  --surface-input: rgba(8, 24, 30, 0.86);
+  --surface-input-subtle: rgba(21, 49, 58, 0.82);
+  --surface-backdrop: rgba(4, 15, 20, 0.72);
+
+  --surface-tint-primary:
+    linear-gradient(135deg, rgba(8, 80, 102, 0.38) 0%, rgba(15, 40, 48, 0.92) 64%, rgba(217, 155, 38, 0.12) 100%);
+  --surface-tint-secondary:
+    linear-gradient(135deg, rgba(21, 49, 58, 0.92) 0%, rgba(15, 40, 48, 0.94) 62%, rgba(224, 90, 71, 0.14) 100%);
+  --surface-tint-amber:
+    linear-gradient(135deg, rgba(89, 58, 5, 0.36) 0%, rgba(21, 49, 58, 0.92) 62%, rgba(8, 80, 102, 0.24) 100%);
+  --surface-toolbar:
+    linear-gradient(90deg, rgba(21, 49, 58, 0.90) 0%, rgba(15, 40, 48, 0.94) 58%, rgba(89, 58, 5, 0.24) 100%);
+  --surface-topbar:
+    linear-gradient(90deg, rgba(15, 40, 48, 0.88) 0%, rgba(15, 40, 48, 0.82) 68%, rgba(61, 39, 3, 0.38) 100%);
+
+  --text-primary: var(--primary-50);
+  --text-secondary: #B9D5DF;
+  --text-muted: var(--neutral-300);
+  --text-inverse: var(--neutral-950);
+
+  --border-subtle: rgba(110, 145, 157, 0.26);
+  --border-card: rgba(110, 145, 157, 0.30);
+  --border-control: var(--neutral-400);
+  --border-strong: var(--neutral-300);
+
+  --link: var(--primary-300);
+  --link-hover: var(--primary-200);
+  --focus-ring: var(--tertiary-400);
+  --focus-halo: rgba(217, 155, 38, 0.30);
+
+  --brand-primary: var(--primary-300);
+  --brand-primary-strong: var(--primary-200);
+  --brand-primary-soft: rgba(120, 199, 226, 0.18);
+  --brand-secondary: var(--secondary-300);
+  --brand-tertiary: var(--tertiary-300);
+  --brand-tertiary-text: var(--tertiary-300);
+
+  --btn-primary-bg: linear-gradient(135deg, #78C7E2 0%, #AEE0F2 100%);
+  --btn-primary-bg-hover: linear-gradient(135deg, #AEE0F2 0%, #D6F0FA 100%);
+  --btn-primary-fg: var(--neutral-950);
+  --btn-primary-border: var(--primary-300);
+
+  --btn-secondary-bg: rgba(120, 199, 226, 0.15);
+  --btn-secondary-bg-hover: rgba(120, 199, 226, 0.25);
+  --btn-secondary-fg: var(--primary-50);
+  --btn-secondary-border: rgba(174, 224, 242, 0.28);
+
+  --btn-inverted-bg: var(--primary-50);
+  --btn-inverted-bg-hover: var(--primary-100);
+  --btn-inverted-fg: var(--neutral-950);
+  --btn-inverted-border: var(--primary-50);
+
+  --btn-outlined-bg: transparent;
+  --btn-outlined-bg-hover: rgba(120, 199, 226, 0.14);
+  --btn-outlined-fg: var(--primary-50);
+  --btn-outlined-border: var(--neutral-400);
+
+  --btn-danger-bg: rgba(164, 50, 34, 0.26);
+  --btn-danger-bg-hover: rgba(196, 67, 49, 0.38);
+  --btn-danger-fg: var(--secondary-200);
+  --btn-danger-border: var(--secondary-500);
+  --btn-danger-solid-bg: linear-gradient(135deg, #C44331 0%, #E05A47 100%);
+  --btn-danger-solid-hover: linear-gradient(135deg, #A43222 0%, #C44331 100%);
+  --btn-danger-solid-fg: var(--neutral-0);
+
+  --status-neutral-bg: rgba(73, 107, 118, 0.28);
+  --status-neutral-fg: var(--primary-100);
+  --status-neutral-border: var(--neutral-600);
+
+  --status-success-bg: rgba(13, 100, 127, 0.30);
+  --status-success-fg: var(--primary-200);
+  --status-success-border: var(--primary-500);
+  --status-success-dot: var(--primary-300);
+
+  --status-info-bg: rgba(22, 123, 155, 0.24);
+  --status-info-fg: var(--primary-100);
+  --status-info-border: var(--primary-400);
+  --status-info-dot: var(--primary-200);
+
+  --status-warning-bg: rgba(152, 102, 14, 0.28);
+  --status-warning-fg: var(--tertiary-200);
+  --status-warning-border: var(--tertiary-400);
+  --status-warning-dot: var(--tertiary-300);
+
+  --status-error-bg: rgba(164, 50, 34, 0.30);
+  --status-error-fg: var(--secondary-200);
+  --status-error-border: var(--secondary-500);
+  --status-error-dot: var(--secondary-300);
+
+  --sidebar-bg:
+    radial-gradient(28rem 22rem at 92% 6%, rgba(217, 155, 38, 0.16) 0%, rgba(217, 155, 38, 0.03) 48%, transparent 72%),
+    radial-gradient(26rem 24rem at 10% 96%, rgba(8, 80, 102, 0.36) 0%, transparent 70%),
+    linear-gradient(176deg, #061318 0%, #0A2028 56%, #0D323E 100%);
+  --sidebar-item-active-bg: linear-gradient(95deg, #78C7E2 0%, #AEE0F2 76%, #EED291 100%);
+  --sidebar-item-active-fg: var(--neutral-950);
+
+  --progress-track: var(--neutral-700);
+  --progress-primary: linear-gradient(90deg, var(--primary-400) 0%, var(--primary-200) 100%);
+  --progress-secondary: linear-gradient(90deg, var(--secondary-500) 0%, var(--secondary-300) 100%);
+  --progress-tertiary: linear-gradient(90deg, var(--tertiary-400) 0%, var(--tertiary-200) 100%);
+
+  --cal-outside-bg: rgba(8, 24, 30, 0.65);
+  --cal-weekend-bg: rgba(21, 49, 58, 0.56);
+  --cal-holiday-bg: rgba(92, 25, 16, 0.36);
+  --cal-pill-selected-bg: linear-gradient(135deg, var(--primary-300) 0%, var(--primary-200) 100%);
+  --cal-pill-selected-fg: var(--neutral-950);
+  --cal-pill-selected-border: var(--primary-200);
+  --cal-pill-conflict-strong-bg: var(--secondary-600);
+  --cal-pill-conflict-strong-fg: var(--neutral-0);
+  --cal-pill-conflict-strong-border: var(--secondary-500);
+  --cal-pill-conflict-other-bar-bg: var(--tertiary-400);
+  --cal-pill-conflict-other-bar-fg: var(--neutral-950);
+  --cal-pill-conflict-other-bar-border: var(--tertiary-300);
+  --cal-row-assigned-bg: linear-gradient(90deg, rgba(13, 100, 127, 0.34) 0%, rgba(152, 102, 14, 0.22) 100%);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.26);
+  --shadow-md: 0 14px 36px rgba(0, 0, 0, 0.42);
+  --shadow-lg: 0 24px 54px rgba(0, 0, 0, 0.56);
+  --shadow: var(--shadow-sm);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --bg-canvas: var(--neutral-950);
+    --bg-canvas-gradient:
+      radial-gradient(64rem 42rem at 92% -4%, rgba(217, 155, 38, 0.13) 0%, rgba(217, 155, 38, 0.03) 45%, transparent 72%),
+      radial-gradient(56rem 40rem at 14% 8%, rgba(8, 80, 102, 0.34) 0%, rgba(8, 80, 102, 0.08) 54%, transparent 78%),
+      radial-gradient(44rem 30rem at 24% 100%, rgba(224, 90, 71, 0.07) 0%, rgba(217, 155, 38, 0.06) 44%, transparent 74%),
+      linear-gradient(180deg, #07151A 0%, #08181E 50%, #0A1D24 100%);
+
+    --surface: rgba(15, 40, 48, 0.90);
+    --surface-solid: var(--neutral-900);
+    --surface-elevated: rgba(21, 49, 58, 0.96);
+    --surface-translucent: rgba(15, 40, 48, 0.84);
+    --surface-subtle: var(--neutral-800);
+    --surface-muted: #1A3943;
+    --surface-hover: #1E424D;
+    --surface-input: rgba(8, 24, 30, 0.86);
+    --surface-input-subtle: rgba(21, 49, 58, 0.82);
+    --surface-backdrop: rgba(4, 15, 20, 0.72);
+
+    --surface-tint-primary:
+      linear-gradient(135deg, rgba(8, 80, 102, 0.38) 0%, rgba(15, 40, 48, 0.92) 64%, rgba(217, 155, 38, 0.12) 100%);
+    --surface-tint-secondary:
+      linear-gradient(135deg, rgba(21, 49, 58, 0.92) 0%, rgba(15, 40, 48, 0.94) 62%, rgba(224, 90, 71, 0.14) 100%);
+    --surface-tint-amber:
+      linear-gradient(135deg, rgba(89, 58, 5, 0.36) 0%, rgba(21, 49, 58, 0.92) 62%, rgba(8, 80, 102, 0.24) 100%);
+    --surface-toolbar:
+      linear-gradient(90deg, rgba(21, 49, 58, 0.90) 0%, rgba(15, 40, 48, 0.94) 58%, rgba(89, 58, 5, 0.24) 100%);
+    --surface-topbar:
+      linear-gradient(90deg, rgba(15, 40, 48, 0.88) 0%, rgba(15, 40, 48, 0.82) 68%, rgba(61, 39, 3, 0.38) 100%);
+
+    --text-primary: var(--primary-50);
+    --text-secondary: #B9D5DF;
+    --text-muted: var(--neutral-300);
+    --text-inverse: var(--neutral-950);
+
+    --border-subtle: rgba(110, 145, 157, 0.26);
+    --border-card: rgba(110, 145, 157, 0.30);
+    --border-control: var(--neutral-400);
+    --border-strong: var(--neutral-300);
+
+    --link: var(--primary-300);
+    --link-hover: var(--primary-200);
+    --focus-ring: var(--tertiary-400);
+    --focus-halo: rgba(217, 155, 38, 0.30);
+
+    --brand-primary: var(--primary-300);
+    --brand-primary-strong: var(--primary-200);
+    --brand-primary-soft: rgba(120, 199, 226, 0.18);
+    --brand-secondary: var(--secondary-300);
+    --brand-tertiary: var(--tertiary-300);
+    --brand-tertiary-text: var(--tertiary-300);
+
+    --btn-primary-bg: linear-gradient(135deg, #78C7E2 0%, #AEE0F2 100%);
+    --btn-primary-bg-hover: linear-gradient(135deg, #AEE0F2 0%, #D6F0FA 100%);
+    --btn-primary-fg: var(--neutral-950);
+    --btn-primary-border: var(--primary-300);
+
+    --btn-secondary-bg: rgba(120, 199, 226, 0.15);
+    --btn-secondary-bg-hover: rgba(120, 199, 226, 0.25);
+    --btn-secondary-fg: var(--primary-50);
+    --btn-secondary-border: rgba(174, 224, 242, 0.28);
+
+    --btn-inverted-bg: var(--primary-50);
+    --btn-inverted-bg-hover: var(--primary-100);
+    --btn-inverted-fg: var(--neutral-950);
+    --btn-inverted-border: var(--primary-50);
+
+    --btn-outlined-bg: transparent;
+    --btn-outlined-bg-hover: rgba(120, 199, 226, 0.14);
+    --btn-outlined-fg: var(--primary-50);
+    --btn-outlined-border: var(--neutral-400);
+
+    --btn-danger-bg: rgba(164, 50, 34, 0.26);
+    --btn-danger-bg-hover: rgba(196, 67, 49, 0.38);
+    --btn-danger-fg: var(--secondary-200);
+    --btn-danger-border: var(--secondary-500);
+    --btn-danger-solid-bg: linear-gradient(135deg, #C44331 0%, #E05A47 100%);
+    --btn-danger-solid-hover: linear-gradient(135deg, #A43222 0%, #C44331 100%);
+    --btn-danger-solid-fg: var(--neutral-0);
+
+    --status-neutral-bg: rgba(73, 107, 118, 0.28);
+    --status-neutral-fg: var(--primary-100);
+    --status-neutral-border: var(--neutral-600);
+
+    --status-success-bg: rgba(13, 100, 127, 0.30);
+    --status-success-fg: var(--primary-200);
+    --status-success-border: var(--primary-500);
+    --status-success-dot: var(--primary-300);
+
+    --status-info-bg: rgba(22, 123, 155, 0.24);
+    --status-info-fg: var(--primary-100);
+    --status-info-border: var(--primary-400);
+    --status-info-dot: var(--primary-200);
+
+    --status-warning-bg: rgba(152, 102, 14, 0.28);
+    --status-warning-fg: var(--tertiary-200);
+    --status-warning-border: var(--tertiary-400);
+    --status-warning-dot: var(--tertiary-300);
+
+    --status-error-bg: rgba(164, 50, 34, 0.30);
+    --status-error-fg: var(--secondary-200);
+    --status-error-border: var(--secondary-500);
+    --status-error-dot: var(--secondary-300);
+
+    --sidebar-bg:
+      radial-gradient(28rem 22rem at 92% 6%, rgba(217, 155, 38, 0.16) 0%, rgba(217, 155, 38, 0.03) 48%, transparent 72%),
+      radial-gradient(26rem 24rem at 10% 96%, rgba(8, 80, 102, 0.36) 0%, transparent 70%),
+      linear-gradient(176deg, #061318 0%, #0A2028 56%, #0D323E 100%);
+    --sidebar-item-active-bg: linear-gradient(95deg, #78C7E2 0%, #AEE0F2 76%, #EED291 100%);
+    --sidebar-item-active-fg: var(--neutral-950);
+
+    --progress-track: var(--neutral-700);
+    --progress-primary: linear-gradient(90deg, var(--primary-400) 0%, var(--primary-200) 100%);
+    --progress-secondary: linear-gradient(90deg, var(--secondary-500) 0%, var(--secondary-300) 100%);
+    --progress-tertiary: linear-gradient(90deg, var(--tertiary-400) 0%, var(--tertiary-200) 100%);
+
+    --cal-outside-bg: rgba(8, 24, 30, 0.65);
+    --cal-weekend-bg: rgba(21, 49, 58, 0.56);
+    --cal-holiday-bg: rgba(92, 25, 16, 0.36);
+    --cal-pill-selected-bg: linear-gradient(135deg, var(--primary-300) 0%, var(--primary-200) 100%);
+    --cal-pill-selected-fg: var(--neutral-950);
+    --cal-pill-selected-border: var(--primary-200);
+    --cal-pill-conflict-strong-bg: var(--secondary-600);
+    --cal-pill-conflict-strong-fg: var(--neutral-0);
+    --cal-pill-conflict-strong-border: var(--secondary-500);
+    --cal-pill-conflict-other-bar-bg: var(--tertiary-400);
+    --cal-pill-conflict-other-bar-fg: var(--neutral-950);
+    --cal-pill-conflict-other-bar-border: var(--tertiary-300);
+    --cal-row-assigned-bg: linear-gradient(90deg, rgba(13, 100, 127, 0.34) 0%, rgba(152, 102, 14, 0.22) 100%);
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.28);
+    --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.26);
+    --shadow-md: 0 14px 36px rgba(0, 0, 0, 0.42);
+    --shadow-lg: 0 24px 54px rgba(0, 0, 0, 0.56);
+    --shadow: var(--shadow-sm);
+  }
+}

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import type { FlashMessage } from '../components/Layout';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { ApiError } from '../services/HttpClient';
 import { appServices } from '../services/ServiceContainer';
 
@@ -53,6 +54,7 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
 
   return (
     <main id="main">
+      <ThemeToggle floating />
       {messages.length > 0 && (
         <div className="auth-messages" role="status">
           {messages.map((m) => (

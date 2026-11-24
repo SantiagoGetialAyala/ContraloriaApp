@@ -420,14 +420,7 @@ export function HojasDeVidaPage({ selectedUserId, usuario, onNotify }: HojasDeVi
                                 </a>
                                 <button
                                   type="button"
-                                  className="text-link"
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: '#b42318',
-                                    cursor: 'pointer',
-                                    padding: 0,
-                                  }}
+                                  className="text-link danger-link"
                                   onClick={() => void handleDeleteDocument(hv)}
                                 >
                                   Eliminar
@@ -530,14 +523,7 @@ export function HojasDeVidaPage({ selectedUserId, usuario, onNotify }: HojasDeVi
                                 </a>
                                 <button
                                   type="button"
-                                  className="text-link"
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: '#b42318',
-                                    cursor: 'pointer',
-                                    padding: 0,
-                                  }}
+                                  className="text-link danger-link"
                                   onClick={() => void handleDeleteDocument(doc)}
                                 >
                                   Eliminar

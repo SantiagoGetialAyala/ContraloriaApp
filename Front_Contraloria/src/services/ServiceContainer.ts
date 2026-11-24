@@ -1,4 +1,5 @@
 import { NavigationController } from '../domain/NavigationController';
+import { ThemeController } from '../domain/ThemeController';
 import { AdminService } from './AdminService';
 import { AuthService } from './AuthService';
 import { ExpedienteService } from './ExpedienteService';
@@ -6,7 +7,7 @@ import { HttpClient } from './HttpClient';
 
 /**
  * Contenedor Singleton orientado a objetos que centraliza e inyecta
- * las dependencias de servicios y navegación de la aplicación.
+ * las dependencias de servicios, navegación y tema visual de la aplicación.
  */
 export class ServiceContainer {
   private static instance: ServiceContainer | null = null;
@@ -16,6 +17,7 @@ export class ServiceContainer {
   public readonly expedientes: ExpedienteService;
   public readonly admin: AdminService;
   public readonly navigation: NavigationController;
+  public readonly theme: ThemeController;
 
   private constructor() {
     this.http = new HttpClient('');
@@ -23,6 +25,7 @@ export class ServiceContainer {
     this.expedientes = new ExpedienteService(this.http);
     this.admin = new AdminService(this.http);
     this.navigation = new NavigationController();
+    this.theme = new ThemeController();
   }
 
   public static getInstance(): ServiceContainer {

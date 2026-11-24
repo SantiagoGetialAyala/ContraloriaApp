@@ -741,11 +741,7 @@ export function CaseDetailPage({
                           return (
                             <tr
                               key={row.number}
-                              style={
-                                isAssigned
-                                  ? { background: '#f0f5ea', fontWeight: 600 }
-                                  : undefined
-                              }
+                              className={isAssigned ? 'row-assigned' : undefined}
                             >
                               <td>
                                 {row.label}{' '}

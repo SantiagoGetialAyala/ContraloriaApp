@@ -1,8 +1,9 @@
-﻿import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { RouteMatch } from '../domain/NavigationController';
 import type { UsuarioSesion } from '../domain/Usuario';
 import type { CaseKind } from '../domain/types';
 import { AppLink } from './AppLink';
+import { ThemeToggle } from './ThemeToggle';
 
 export interface FlashMessage {
   id: number;
@@ -115,6 +116,7 @@ export function Layout({ usuario, route, activeCaseKind, messages, onDismissMess
         </div>
         <div className="topbar-right">
           <div className="session-identity"><strong>{usuario.nombreCompleto}</strong><small>{usuario.etiquetasRol.join(' · ') || 'Personal autorizado'}</small></div>
+          <ThemeToggle />
           <button className="btn secondary logout-button" type="button" disabled={loggingOut} onClick={async () => { setLoggingOut(true); try { await onLogout(); } finally { setLoggingOut(false); } }}>
             {loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
           </button>
