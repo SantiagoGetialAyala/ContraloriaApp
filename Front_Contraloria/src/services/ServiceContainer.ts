@@ -1,5 +1,6 @@
 import { NavigationController } from '../domain/NavigationController';
 import { ThemeController } from '../domain/ThemeController';
+import { AcuerdosService } from './AcuerdosService';
 import { AdminService } from './AdminService';
 import { AuthService } from './AuthService';
 import { ExpedienteService } from './ExpedienteService';
@@ -16,6 +17,7 @@ export class ServiceContainer {
   public readonly auth: AuthService;
   public readonly expedientes: ExpedienteService;
   public readonly admin: AdminService;
+  public readonly acuerdos: AcuerdosService;
   public readonly navigation: NavigationController;
   public readonly theme: ThemeController;
 
@@ -24,6 +26,7 @@ export class ServiceContainer {
     this.auth = new AuthService(this.http);
     this.expedientes = new ExpedienteService(this.http);
     this.admin = new AdminService(this.http);
+    this.acuerdos = new AcuerdosService(this.http);
     this.navigation = new NavigationController();
     this.theme = new ThemeController();
   }

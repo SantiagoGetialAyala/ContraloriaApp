@@ -16,6 +16,7 @@ export type RouteMatch =
   | { name: 'user_access'; userId: number }
   | { name: 'hojas_de_vida' }
   | { name: 'hoja_de_vida_detail'; userId: number }
+  | { name: 'acuerdos_sindicales' }
   | { name: 'audit' }
   | { name: 'not_found' };
 
@@ -98,6 +99,7 @@ export class NavigationController {
     if (clean === '/administracion/usuarios') return { name: 'users' };
     if (clean === '/administracion/auditoria') return { name: 'audit' };
     if (clean === '/hojas-de-vida') return { name: 'hojas_de_vida' };
+    if (clean === '/acuerdos-sindicales') return { name: 'acuerdos_sindicales' };
 
     const hojaDeVidaMatch = clean.match(/^\/hojas-de-vida\/(\d+)$/);
     if (hojaDeVidaMatch) {

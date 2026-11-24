@@ -606,3 +606,18 @@ def forbidden(request, exception=None):
 
 def not_found(request, exception=None):
     return render(request, 'core/error.html', {'title': 'No encontramos este recurso', 'explanation': 'Compruebe la dirección y los permisos de su usuario.'}, status=404)
+
+
+@login_required
+def evidencia_sindical_download(request, evidencia_id, preview=False):
+    from . import acuerdos
+    from .models import EvidenciaSindical
+    acuerdos.require_ver(request.user)
+    evidencia = get_object_or_404(EvidenciaSindical, pk=evidencia_id)
+    services.audit(None, request.user, 'Evidencia de acuerdo sindical visualizada' if preview else 'Evidencia de acuerdo sindical descargada',
+                   evidencia=evidencia.pk, sha256=evidencia.sha256)
+    response = FileResponse(BytesIO(bytes(evidencia.content)), as_attachment=not preview, filename=evidencia.name,
+                            content_type=evidencia.content_type)
+    if preview:
+        response['Content-Security-Policy'] = "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'self'"
+    return response

@@ -468,6 +468,7 @@ export interface PersonHojaDeVidaDTO {
   codigo: string;
   grado: string;
   hire_date: string;
+  birth_date?: string;
   phone: string;
   institutional_email: string;
   profession: string;
@@ -496,4 +497,71 @@ export interface HojaDeVidaDetailDTO {
   available_roles: Array<[string, string]>;
   employments: Array<[string, string]>;
   document_categories: Array<[string, string]>;
+}
+
+// --- Acuerdos sindicales ---------------------------------------------------------------------
+
+export interface EvidenciaSindicalDTO {
+  id: number;
+  tipo: string;
+  tipo_label: string;
+  titulo: string;
+  name: string;
+  size: number;
+  uploaded_by: string;
+  created_at: string;
+  preview_url: string;
+  download_url: string;
+}
+
+export interface CumplimientoAcuerdoDTO {
+  id: number;
+  fecha: string;
+  estado: 'en_tramite' | 'cumplido' | 'no_cumplido';
+  estado_label: string;
+  descripcion: string;
+  beneficiarios: Array<{ id: number; nombre: string }>;
+  evidencias: EvidenciaSindicalDTO[];
+  faltantes: Array<{ codigo: string; label: string }>;
+  created_by: string;
+  updated_at: string;
+}
+
+export type EstadoPuntoCodigo = 'al_dia' | 'falta_evidencia' | 'sin_seguimiento' | 'sin_registros';
+
+export interface PuntoAcuerdoDTO {
+  id: number;
+  articulo: string;
+  titulo: string;
+  texto: string;
+  tipo: 'beneficio' | 'compromiso';
+  tipo_label: string;
+  periodicidad: 'por_solicitud' | 'anual' | 'semestral';
+  periodicidad_label: string;
+  evidencias_requeridas: Array<{ codigo: string; label: string }>;
+  estado: { codigo: EstadoPuntoCodigo; etiqueta: string; detalle: string };
+  cumplimientos: CumplimientoAcuerdoDTO[];
+}
+
+export interface AcuerdoSindicalDTO {
+  id: number;
+  numero: string;
+  titulo: string;
+  organizacion: string;
+  fecha_firma: string;
+  acto_adopcion: string;
+  vigente: boolean;
+  documentos: EvidenciaSindicalDTO[];
+  puntos: PuntoAcuerdoDTO[];
+}
+
+export interface AcuerdosTableroDTO {
+  anio: number;
+  hoy: string;
+  puede_gestionar: boolean;
+  resumen: Record<EstadoPuntoCodigo | 'puntos', number>;
+  alertas: Array<{ punto_id: number; acuerdo: string; titulo: string; codigo: EstadoPuntoCodigo; mensaje: string }>;
+  proximos: Array<{ fecha: string; tipo: 'cumpleanos' | 'antiguedad'; persona: string; mensaje: string; punto_id: number | null }>;
+  funcionarios: Array<{ id: number; nombre: string; dependencia: string }>;
+  acuerdos: AcuerdoSindicalDTO[];
 }

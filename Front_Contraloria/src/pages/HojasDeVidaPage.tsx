@@ -57,6 +57,7 @@ export function HojasDeVidaPage({ selectedUserId, usuario, onNotify }: HojasDeVi
   const [editCodigo, setEditCodigo] = useState('');
   const [editGrado, setEditGrado] = useState('');
   const [editHireDate, setEditHireDate] = useState('');
+  const [editBirthDate, setEditBirthDate] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editProfession, setEditProfession] = useState('');
@@ -73,6 +74,7 @@ export function HojasDeVidaPage({ selectedUserId, usuario, onNotify }: HojasDeVi
     setEditCodigo(p.codigo);
     setEditGrado(p.grado);
     setEditHireDate(p.hire_date);
+    setEditBirthDate(p.birth_date || '');
     setEditPhone(p.phone);
     setEditEmail(p.institutional_email);
     setEditProfession(p.profession);
@@ -205,6 +207,7 @@ export function HojasDeVidaPage({ selectedUserId, usuario, onNotify }: HojasDeVi
         codigo: editCodigo,
         grado: editGrado,
         hire_date: editHireDate,
+        birth_date: editBirthDate,
         phone: editPhone,
         institutional_email: editEmail,
         profession: editProfession,
@@ -713,6 +716,17 @@ export function HojasDeVidaPage({ selectedUserId, usuario, onNotify }: HojasDeVi
                     value={editHireDate}
                     onChange={(e) => setEditHireDate(e.target.value)}
                   />
+                </div>
+                <div className="field">
+                  <label htmlFor="ed-birth">Fecha de nacimiento</label>
+                  <input
+                    id="ed-birth"
+                    type="date"
+                    aria-describedby="ed-birth-help"
+                    value={editBirthDate}
+                    onChange={(e) => setEditBirthDate(e.target.value)}
+                  />
+                  <div className="help" id="ed-birth-help">Sirve para recordar el día de descanso por cumpleaños del acuerdo sindical.</div>
                 </div>
                 <div className="field">
                   <label htmlFor="ed-phone">Teléfono / Celular</label>

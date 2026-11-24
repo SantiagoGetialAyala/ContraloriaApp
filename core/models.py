@@ -52,6 +52,7 @@ class Profile(models.Model):
     institutional_email = models.EmailField(max_length=160, blank=True)
     profession = models.CharField(max_length=160, blank=True)
     bio = models.TextField(blank=True)
+    birth_date = models.DateField(null=True, blank=True)
 
 
 class EmployeeDocument(models.Model):
@@ -248,3 +249,101 @@ class LoginAttempt(models.Model):
     key = models.CharField(max_length=64, unique=True)
     failures = models.PositiveIntegerField(default=0)
     last_attempt = models.DateTimeField()
+
+
+# --- Acuerdos sindicales --------------------------------------------------------------------------
+# Los acuerdos se acumulan: lo pactado antes sigue vigente (Resolución 080 de 2023, considerandos).
+
+PUNTO_TIPOS = [
+    ('beneficio', 'Beneficio para funcionarios'),
+    ('compromiso', 'Compromiso de la entidad'),
+]
+PUNTO_PERIODICIDAD = [
+    ('por_solicitud', 'Cuando un funcionario lo solicita'),
+    ('anual', 'Una vez al año'),
+    ('semestral', 'Seguimiento cada semestre'),
+]
+CUMPLIMIENTO_ESTADOS = [
+    ('en_tramite', 'Solicitado o en trámite'),
+    ('cumplido', 'Concedido o cumplido'),
+    ('no_cumplido', 'Negado o no se cumplió'),
+]
+EVIDENCIA_TIPOS = [
+    ('solicitud', 'Solicitud'),
+    ('resolucion', 'Resolución o acto administrativo'),
+    ('constancia', 'Constancia de cumplimiento'),
+    ('acuerdo_firmado', 'Documento firmado del acuerdo'),
+    ('otro', 'Otro soporte'),
+]
+
+
+class AcuerdoSindical(models.Model):
+    numero = models.CharField(max_length=40)
+    titulo = models.CharField(max_length=200)
+    organizacion = models.CharField(max_length=200, default='ASDECCOL Subdirectiva Nariño')
+    fecha_firma = models.DateField()
+    acto_adopcion = models.CharField(max_length=200, blank=True)
+    vigente = models.BooleanField(default=True)
+    notas = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha_firma']
+
+    def __str__(self):
+        return self.titulo
+
+
+class PuntoAcuerdo(models.Model):
+    acuerdo = models.ForeignKey(AcuerdoSindical, on_delete=models.PROTECT, related_name='puntos')
+    orden = models.PositiveIntegerField()
+    articulo = models.CharField(max_length=60)
+    titulo = models.CharField(max_length=200)
+    texto = models.TextField()
+    tipo = models.CharField(max_length=20, choices=PUNTO_TIPOS)
+    periodicidad = models.CharField(max_length=20, choices=PUNTO_PERIODICIDAD)
+    evidencias_requeridas = models.JSONField(default=list)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['acuerdo', 'orden']
+        constraints = [models.UniqueConstraint(fields=['acuerdo', 'orden'], name='unique_punto_orden')]
+
+    def __str__(self):
+        return f'{self.articulo} · {self.titulo}'
+
+
+class CumplimientoAcuerdo(models.Model):
+    """Registro de que un punto se solicitó, se concedió o se cumplió, con sus evidencias."""
+
+    punto = models.ForeignKey(PuntoAcuerdo, on_delete=models.PROTECT, related_name='cumplimientos')
+    fecha = models.DateField()
+    estado = models.CharField(max_length=20, choices=CUMPLIMIENTO_ESTADOS)
+    descripcion = models.TextField()
+    beneficiarios = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='beneficios_sindicales')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='cumplimientos_registrados')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fecha', '-id']
+
+
+class EvidenciaSindical(models.Model):
+    """Soporte de un cumplimiento, o documento firmado del acuerdo cuando no tiene cumplimiento."""
+
+    acuerdo = models.ForeignKey(AcuerdoSindical, on_delete=models.PROTECT, related_name='evidencias')
+    cumplimiento = models.ForeignKey(CumplimientoAcuerdo, on_delete=models.PROTECT, null=True, blank=True, related_name='evidencias')
+    tipo = models.CharField(max_length=20, choices=EVIDENCIA_TIPOS)
+    titulo = models.CharField(max_length=200, blank=True)
+    name = models.CharField(max_length=200)
+    content_type = models.CharField(max_length=100)
+    content = models.BinaryField()
+    sha256 = models.CharField(max_length=64)
+    size = models.PositiveIntegerField()
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='evidencias_sindicales')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
