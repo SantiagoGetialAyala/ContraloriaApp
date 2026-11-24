@@ -34,6 +34,8 @@ from .forms import (
     VacationInterruptionForm,
 )
 from .models import (
+    AcuerdoSindical,
+    CumplimientoAcuerdo,
     EMPLOYEE_DOC_CATEGORIES,
     KINDS,
     ROLES,
@@ -48,7 +50,7 @@ from .models import (
     Profile,
     TravelScale,
 )
-from . import services, vacations
+from . import acuerdos, services, vacations
 from .views import KIND_TITLES, ROLE_LABELS, decorate, filtered_cases, record_failure
 from .workflows import (
     DOCS,
@@ -1507,6 +1509,7 @@ class EmployeeProfileSerializer:
             'institutional_email': getattr(profile, 'institutional_email', '') if profile else '',
             'profession': getattr(profile, 'profession', '') if profile else '',
             'bio': getattr(profile, 'bio', '') if profile else '',
+            'birth_date': profile.birth_date.isoformat() if (profile and profile.birth_date) else '',
             'is_jefe': bool(dependencia and dependencia.jefe_id == user.pk),
             'is_active': user.is_active,
             'roles': roles,
@@ -1515,6 +1518,21 @@ class EmployeeProfileSerializer:
             'documents_count': len(docs),
             'latest_hoja_vida': latest_hv,
         }
+
+
+def parse_birth_date(raw):
+    """Fecha de nacimiento opcional: ISO, en el pasado y con una edad laboral razonable."""
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    try:
+        value = date.fromisoformat(raw)
+    except ValueError:
+        raise ValidationError('La fecha de nacimiento no es válida.')
+    today = timezone.localdate()
+    if value >= today or value.year < today.year - 100:
+        raise ValidationError('Revise la fecha de nacimiento.')
+    return value
 
 
 class PersonnelApiView(BaseApiView):
@@ -1613,6 +1631,8 @@ class HojasDeVidaListApiView(PersonnelApiView):
             if hire_date > timezone.localdate():
                 return self.json_error('La fecha de ingreso no puede ser futura.', status=400)
 
+        birth_date = parse_birth_date(body.get('birth_date'))
+
         uploaded_file = request.FILES.get('file')
         doc_category = (body.get('doc_category') or 'hoja_vida').strip()
         doc_title = (body.get('doc_title') or '').strip()
@@ -1629,6 +1649,7 @@ class HojasDeVidaListApiView(PersonnelApiView):
                 'codigo': codigo,
                 'grado': grado,
                 'hire_date': hire_date,
+                'birth_date': birth_date,
                 'phone': phone,
                 'institutional_email': institutional_email,
                 'profession': profession,
@@ -1718,6 +1739,8 @@ class HojaDeVidaDetailApiView(PersonnelApiView):
             else:
                 hire_date = None
 
+        birth_date = parse_birth_date(body.get('birth_date')) if 'birth_date' in body else profile.birth_date
+
         roles = body.get('roles')
         if roles is not None:
             if isinstance(roles, str):
@@ -1762,6 +1785,7 @@ class HojaDeVidaDetailApiView(PersonnelApiView):
                 'codigo': (body.get('codigo') if 'codigo' in body else profile.codigo or '').strip()[:10],
                 'grado': (body.get('grado') if 'grado' in body else profile.grado or '').strip()[:10],
                 'hire_date': hire_date,
+                'birth_date': birth_date,
                 'phone': (body.get('phone') if 'phone' in body else getattr(profile, 'phone', '') or '').strip()[:40],
                 'institutional_email': (body.get('institutional_email') if 'institutional_email' in body else getattr(profile, 'institutional_email', '') or '').strip()[:160],
                 'profession': (body.get('profession') if 'profession' in body else getattr(profile, 'profession', '') or '').strip()[:160],
@@ -1831,3 +1855,52 @@ class HojaDeVidaDocumentDeleteApiView(PersonnelApiView):
                 category=doc_cat,
             )
         return self.json_success(message='Documento eliminado de la hoja de vida.')
+
+
+# --- Acuerdos sindicales -------------------------------------------------------------------------
+
+class AcuerdosSindicalesApiView(BaseApiView):
+    """Tablero de acuerdos: puntos, estado de seguimiento, alertas y próximos beneficios de un año."""
+
+    def get(self, request):
+        try:
+            anio = int(request.GET.get('anio') or timezone.localdate().year)
+        except ValueError:
+            raise ValidationError('El año no es válido.')
+        if not 2015 <= anio <= timezone.localdate().year + 1:
+            raise ValidationError('Elija un año entre 2015 y el próximo año.')
+        return self.json_success(data=acuerdos.tablero(request.user, anio))
+
+
+class CumplimientoCreateApiView(BaseApiView):
+    def post(self, request):
+        body = self.parse_body(request)
+        c = acuerdos.crear_cumplimiento(request.user, body.get('punto_id'), body)
+        return self.json_success(data={'id': c.pk}, message='Registro guardado.', status=201)
+
+
+class CumplimientoUpdateApiView(BaseApiView):
+    def post(self, request, cumplimiento_id):
+        get_object_or_404(CumplimientoAcuerdo, pk=cumplimiento_id)
+        acuerdos.actualizar_cumplimiento(request.user, cumplimiento_id, self.parse_body(request))
+        return self.json_success(message='Registro actualizado. El cambio quedó en el historial.')
+
+
+class CumplimientoEvidenciaApiView(BaseApiView):
+    def post(self, request, cumplimiento_id):
+        get_object_or_404(CumplimientoAcuerdo, pk=cumplimiento_id)
+        ev = acuerdos.adjuntar_evidencia(
+            request.user, request.FILES.get('file'), request.POST.get('tipo', ''),
+            request.POST.get('titulo', ''), cumplimiento_id=cumplimiento_id,
+        )
+        return self.json_success(data=acuerdos.serializar_evidencia(ev), message='Documento adjuntado.', status=201)
+
+
+class AcuerdoDocumentoApiView(BaseApiView):
+    def post(self, request, acuerdo_id):
+        get_object_or_404(AcuerdoSindical, pk=acuerdo_id)
+        ev = acuerdos.adjuntar_evidencia(
+            request.user, request.FILES.get('file'), request.POST.get('tipo', 'acuerdo_firmado'),
+            request.POST.get('titulo', ''), acuerdo_id=acuerdo_id,
+        )
+        return self.json_success(data=acuerdos.serializar_evidencia(ev), message='Documento del acuerdo adjuntado.', status=201)

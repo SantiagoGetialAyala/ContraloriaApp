@@ -55,6 +55,11 @@ export class UsuarioSesion {
     return this.dto.can_configure;
   }
 
+  /** Talento Humano, Control Interno, la Dirección y la Secretaría consultan los acuerdos sindicales. */
+  public puedeVerAcuerdos(): boolean {
+    return ['talento', 'administrador', 'control', 'autoridad', 'secretaria'].some((rol) => this.tieneRol(rol));
+  }
+
   public tieneRol(rol: string): boolean {
     return this.dto.roles.includes(rol);
   }

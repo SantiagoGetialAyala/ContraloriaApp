@@ -54,6 +54,13 @@ urlpatterns = [
     path('api/hojas-de-vida/<int:user_id>/', api.HojaDeVidaDetailApiView.as_view(), name='api_hoja_vida_detail'),
     path('api/hojas-de-vida/<int:user_id>/documentos/', api.HojaDeVidaDocumentUploadApiView.as_view(), name='api_hoja_vida_upload'),
     path('api/hojas-de-vida/<int:user_id>/documentos/<int:document_id>/eliminar/', api.HojaDeVidaDocumentDeleteApiView.as_view(), name='api_hoja_vida_delete_doc'),
+    path('api/acuerdos-sindicales/', api.AcuerdosSindicalesApiView.as_view(), name='api_acuerdos'),
+    path('api/acuerdos-sindicales/cumplimientos/', api.CumplimientoCreateApiView.as_view(), name='api_cumplimiento_create'),
+    path('api/acuerdos-sindicales/cumplimientos/<int:cumplimiento_id>/', api.CumplimientoUpdateApiView.as_view(), name='api_cumplimiento_update'),
+    path('api/acuerdos-sindicales/cumplimientos/<int:cumplimiento_id>/evidencias/', api.CumplimientoEvidenciaApiView.as_view(), name='api_cumplimiento_evidencia'),
+    path('api/acuerdos-sindicales/<int:acuerdo_id>/documentos/', api.AcuerdoDocumentoApiView.as_view(), name='api_acuerdo_documento'),
+    path('documentos/acuerdos/<int:evidencia_id>/ver/', views.evidencia_sindical_download, {'preview': True}, name='evidencia_sindical_preview'),
+    path('documentos/acuerdos/<int:evidencia_id>/descargar/', views.evidencia_sindical_download, name='evidencia_sindical_download'),
 ]
 handler403 = views.forbidden
 handler404 = views.not_found

@@ -630,6 +630,8 @@ def apply_profile(profile, data):
             setattr(profile, key, data[key] or '')
     if 'hire_date' in data:
         profile.hire_date = data['hire_date']
+    if 'birth_date' in data:
+        profile.birth_date = data['birth_date']
     if 'cedula' in data:
         profile.cedula = data['cedula'] or None
     profile.save()

@@ -56,7 +56,7 @@ export function Layout({ usuario, route, activeCaseKind, messages, onDismissMess
   useEffect(() => {
     const titles: Record<string, string> = {
       dashboard: 'Inicio', users: 'Usuarios y permisos', user_access: 'Permisos de usuario',
-      hojas_de_vida: 'Hojas de vida', hoja_de_vida_detail: 'Hoja de vida',
+      hojas_de_vida: 'Hojas de vida', hoja_de_vida_detail: 'Hoja de vida', acuerdos_sindicales: 'Acuerdos sindicales',
       procedure: 'Procedimientos', configuration: 'Parámetros y normativa',
       audit: 'Auditoría', password_change: 'Cambiar contraseña',
       vacation_calendar: 'Calendario de vacaciones', vacation_history: 'Historial de vacaciones', compensatory_calendar: 'Calendario de compensatorios',
@@ -87,6 +87,9 @@ export function Layout({ usuario, route, activeCaseKind, messages, onDismissMess
         </AppLink>)}
         {personnel && <AppLink to="/hojas-de-vida" onClick={closeSidebar} className={`nav-item ${route.name.startsWith('hoja') ? 'active' : ''}`} aria-current={route.name.startsWith('hoja') ? 'page' : undefined}>
           <span aria-hidden="true">▤</span> Hojas de vida
+        </AppLink>}
+        {usuario.puedeVerAcuerdos() && <AppLink to="/acuerdos-sindicales" onClick={closeSidebar} className={`nav-item ${route.name === 'acuerdos_sindicales' ? 'active' : ''}`} aria-current={route.name === 'acuerdos_sindicales' ? 'page' : undefined}>
+          <span aria-hidden="true">✦</span> Acuerdos sindicales
         </AppLink>}
         <div className="side-section">Consulta y configuración</div>
         <AppLink to="/procedimientos" onClick={closeSidebar} className={`nav-item ${route.name === 'procedure' ? 'active' : ''}`} aria-current={route.name === 'procedure' ? 'page' : undefined}>
