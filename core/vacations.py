@@ -11,6 +11,7 @@ from django.utils import timezone
 from .models import Case, Holiday, VacationLedgerEntry, VacationPeriod
 
 DAYS_PER_PERIOD = 15
+DIAS_MINIMOS_PRIMERA_SALIDA = 5
 PRESCRIPTION_YEARS = 4
 MAX_ACCUMULATED_PERIODS = 2
 UPCOMING_ALERT_DAYS = 15
@@ -243,6 +244,8 @@ def plan_case(case, strict=False):
     first = date.fromisoformat(start)
     last = add_business_days(first, days)
     period = assign_period(case)
+    if days < DIAS_MINIMOS_PRIMERA_SALIDA and es_primera_salida(period, case):
+        raise ValidationError(f'La primera salida de vacaciones de cada periodo debe ser de al menos {DIAS_MINIMOS_PRIMERA_SALIDA} días hábiles. Los días restantes se pueden tomar después.')
     data.update({
         'end_date': last.isoformat(),
         'return_date': next_business_day(last).isoformat(),
@@ -296,6 +299,115 @@ def alerts(user, cases, today=None):
         if len(rows) >= MAX_ACCUMULATED_PERIODS:
             result.append({'case': None, 'label': f'{name}: {len(rows)} periodos de vacaciones acumulados', 'date': today})
         for row in rows:
+            plazo = plazo_para_disfrutar(row['period'])
+            if plazo and plazo <= today + timedelta(days=30):
+                verbo = 'se venció el' if plazo < today else 'vence el'
+                result.append({'case': None, 'label': f"{name}: le quedan {row['balance']} días del {row['period'].label}; {verbo} plazo para tomarlos ({plazo:%d/%m/%Y})", 'date': plazo})
             if row['prescribes_on'] <= today + timedelta(days=PRESCRIPTION_ALERT_DAYS):
                 result.append({'case': None, 'label': f"{name}: el {row['period'].label} prescribe con {row['balance']} días pendientes", 'date': row['prescribes_on']})
     return result
+
+
+# --- Suspensiones, mínimo de la primera salida e historial -------------------------------------
+# Reglas acordadas con Talento Humano (reunión de noviembre de 2026):
+# - La única novedad de vacaciones es la suspensión; no existe el aplazamiento.
+# - La primera salida de cada periodo es de al menos 5 días hábiles. Los días restantes
+#   pueden tomarse después, en salidas de cualquier tamaño, hasta completar los 15.
+# - Solo se suspende cuando las vacaciones ya empezaron y se han disfrutado al menos 5 días
+#   hábiles del periodo. Se puede suspender más de una vez.
+# - Los días restantes deben tomarse dentro del año contado desde el primer día de vacaciones
+#   del periodo. El sistema avisa; no bloquea, para que los días no queden perdidos.
+
+def dias_disfrutados(period, exclude_case=None):
+    """Días ya tomados del periodo: concedidos menos devueltos, más los registrados antes del sistema."""
+    entries = period.entries.all()
+    if exclude_case is not None:
+        entries = entries.exclude(case_id=exclude_case.pk)
+    sums = {row['kind']: row['total'] for row in entries.values('kind').annotate(total=Sum('days'))}
+    return sums.get('disfrute', 0) - sums.get('devolucion', 0) + sums.get('carga_inicial', 0)
+
+
+def es_primera_salida(period, case):
+    otras = period.entries.exclude(case_id=case.pk).filter(kind__in=['disfrute', 'carga_inicial']).exists()
+    return not otras and reserved_days(period, exclude_case=case) == 0
+
+
+def plazo_para_disfrutar(period):
+    """Último día para tomar los días del periodo: un año desde el primer día de vacaciones."""
+    primera = period.entries.filter(kind='disfrute').order_by('effective_on').first()
+    return add_years(primera.effective_on, 1) - timedelta(days=1) if primera else None
+
+
+def fecha_minima_suspension(case):
+    """Primer día desde el que se puede suspender: después de 5 días hábiles disfrutados del periodo."""
+    period = VacationPeriod.objects.get(pk=case.data['period_id'])
+    start = date.fromisoformat(case.data['start_date'])
+    faltan = max(0, DIAS_MINIMOS_PRIMERA_SALIDA - dias_disfrutados(period, exclude_case=case))
+    if faltan == 0:
+        return start + timedelta(days=1)
+    return add_business_days(start, faltan) + timedelta(days=1)
+
+
+def puede_ver_historial(user, employee):
+    from .workflows import role_names
+    if not user.is_authenticated:
+        return False
+    if user.pk == employee.pk or role_names(user) & {'talento', 'administrador', 'autoridad', 'control'}:
+        return True
+    return is_superior(user, employee)
+
+
+def historial(employee, today=None):
+    """Historia de cada periodo: salidas, suspensiones con su resolución, días tomados antes del
+    sistema y lo que queda pendiente. Sirve para verificar cuando alguien dice «me faltan 10 días»."""
+    from django.urls import reverse
+    today = today or timezone.localdate()
+    casos = [c for c in Case.objects.filter(owner=employee, kind='vacaciones').exclude(stage='rechazado')
+             .prefetch_related('vacation_entries')]
+    periodos = []
+    for row in period_summary(employee, today):
+        period = row['period']
+        eventos = []
+        for e in period.entries.filter(kind='carga_inicial', case__isnull=True):
+            eventos.append({'tipo': 'carga_inicial', 'fecha': e.effective_on.isoformat(), 'dias': e.days, 'nota': e.note})
+        for c in casos:
+            d = c.data
+            if d.get('period_id') != period.pk:
+                continue
+            concedida = any(x.kind == 'disfrute' for x in c.vacation_entries.all())
+            base = {'case_id': str(c.pk), 'referencia': c.reference, 'fecha': d.get('start_date')}
+            if not concedida:
+                if c.stage != 'cerrado':
+                    from .workflows import stage_label
+                    eventos.append({**base, 'tipo': 'en_tramite', 'dias': int(d.get('business_days') or 0),
+                                    'fecha_fin': d.get('end_date'), 'etapa': stage_label(c)})
+                continue
+            if d.get('interruption_kind') == 'suspension':
+                eventos.append({**base, 'tipo': 'salida', 'dias': int(d.get('enjoyed_days') or 0),
+                                'fecha_fin': d.get('end_date'), 'suspendida': True})
+                doc_id = d.get('interruption_document_id')
+                eventos.append({
+                    **base, 'tipo': 'suspension', 'fecha': d.get('interruption_date'),
+                    'dias': int(d.get('returned_days') or 0), 'motivo': d.get('interruption_reason', ''),
+                    'acto_numero': d.get('interruption_act_number', ''), 'acto_fecha': d.get('interruption_act_date', ''),
+                    'documento_url': reverse('document_preview', args=[doc_id]) if doc_id else '',
+                })
+            else:
+                fin = date.fromisoformat(d['end_date'])
+                eventos.append({**base, 'tipo': 'salida', 'dias': int(d.get('business_days') or 0),
+                                'fecha_fin': d['end_date'], 'suspendida': False,
+                                'en_curso': date.fromisoformat(d['start_date']) <= today <= fin,
+                                'futura': date.fromisoformat(d['start_date']) > today})
+        eventos.sort(key=lambda e: (e.get('fecha') or '', 0 if e['tipo'] != 'suspension' else 1))
+        plazo = plazo_para_disfrutar(period)
+        periodos.append({
+            'numero': period.number, 'etiqueta': period.label,
+            'desde': period.service_from.isoformat(), 'hasta': period.service_to.isoformat(),
+            'dias_del_periodo': period.entitled_days, 'pendientes': row['balance'],
+            'tomados': period.entitled_days - row['balance'], 'reservados': row['reserved'],
+            'plazo': plazo.isoformat() if plazo else None,
+            'plazo_vencido': bool(plazo and plazo < today and row['balance'] > 0),
+            'prescrito': row['prescribed'], 'prescribe': row['prescribes_on'].isoformat(),
+            'eventos': eventos,
+        })
+    return periodos

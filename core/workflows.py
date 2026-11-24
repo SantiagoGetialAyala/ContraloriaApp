@@ -85,7 +85,9 @@ FIELDS = {
     'period_label': ('Periodo de causación asignado', 'text'),
     'jefe_note': ('Visto bueno del jefe inmediato', 'textarea'),
     'actual_return_date': ('Fecha efectiva de reintegro', 'pastdate'),
-    'interruption_kind': ('Novedad registrada', 'choice', [('suspension', 'Suspensión'), ('aplazamiento', 'Aplazamiento')]),
+    'interruption_kind': ('Novedad registrada', 'choice', [('suspension', 'Suspensión'), ('aplazamiento', 'Aplazamiento (registro anterior)')]),
+    'interruption_act_number': ('Resolución que ordena la suspensión', 'text'),
+    'interruption_act_date': ('Fecha de la resolución de suspensión', 'date'),
     'interruption_date': ('Fecha de la novedad', 'date'),
     'interruption_reason': ('Motivo de la novedad', 'textarea'),
     'enjoyed_days': ('Días hábiles disfrutados', 'int'),
@@ -109,7 +111,7 @@ DOCS = {
     'soporte_tiempo': 'Soporte del tiempo trabajado', 'revision_soporte_tiempo': 'Revisión de soportes del tiempo trabajado',
     'autorizacion_reconocimiento': 'Autorización del reconocimiento de tiempo', 'solicitud_compensatorio': 'Solicitud de compensatorio',
     'revision_saldo': 'Verificación de saldo y condiciones', 'autorizacion_compensatorio': 'Autorización del compensatorio',
-    'novedad_vacaciones': 'Soporte de suspensión o aplazamiento de vacaciones',
+    'novedad_vacaciones': 'Resolución de suspensión de vacaciones',
 }
 # Roles relacionales: dependen del expediente, no de un grupo del usuario.
 RELATIONAL_ROLES = {'owner': 'Solicitante', 'jefe': 'Jefe inmediato'}

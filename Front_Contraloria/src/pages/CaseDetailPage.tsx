@@ -53,11 +53,12 @@ export function CaseDetailPage({
   const [recDocId, setRecDocId] = useState('');
   const [recNote, setRecNote] = useState('');
 
-  // Estado formulario novedad de vacaciones
-  const [intKind, setIntKind] = useState<'suspension' | 'aplazamiento'>('suspension');
+  // Formulario de suspensión de vacaciones (única novedad del módulo)
   const [intDate, setIntDate] = useState('');
   const [intReason, setIntReason] = useState('');
-  const [intDocId, setIntDocId] = useState('');
+  const [intActNumber, setIntActNumber] = useState('');
+  const [intActDate, setIntActDate] = useState('');
+  const [intFile, setIntFile] = useState<File | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [historyEvents, setHistoryEvents] = useState<CaseDetailDTO['events'] | null>(null);
@@ -343,9 +344,13 @@ export function CaseDetailPage({
 
   const handleVacationInterruptionSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!intFile) {
+      onNotify('warning', 'Adjunte la resolución que ordena la suspensión.');
+      return;
+    }
     if (
       !window.confirm(
-        '¿Confirma la novedad? Los días devueltos quedarán registrados de forma permanente.',
+        `¿Confirma que las vacaciones se suspenden desde el ${FormateadorTexto.fechaCorta(intDate)}?\n\nLa resolución y los días devueltos quedarán registrados y no se pueden borrar.`,
       )
     ) {
       return;
@@ -353,22 +358,26 @@ export function CaseDetailPage({
     setBusy(true);
     try {
       const { expediente: actualizado, mensaje } =
-        await appServices.expedientes.registrarNovedadVacaciones(expediente.id, {
+        await appServices.expedientes.suspenderVacaciones(expediente.id, {
           revision: expediente.revision,
-          kind: intKind,
           on_date: intDate,
           reason: intReason,
-          document_id: Number(intDocId),
+          acto_numero: intActNumber,
+          acto_fecha: intActDate,
+          file: intFile,
         });
       setIntDate('');
       setIntReason('');
+      setIntActNumber('');
+      setIntActDate('');
+      setIntFile(null);
       sincronizarEstadoLocal(actualizado);
       onNotify('success', mensaje);
     } catch (err) {
       if (err instanceof ApiError) {
         err.errors.forEach((m) => onNotify('error', m));
       } else {
-        onNotify('error', 'No fue posible registrar la novedad de vacaciones.');
+        onNotify('error', 'No fue posible suspender las vacaciones.');
       }
     } finally {
       setBusy(false);
@@ -796,73 +805,96 @@ export function CaseDetailPage({
                     </table>
                   </div>
                 )}
+                <p className="padded vac-history-link">
+                  <AppLink className="btn secondary" to={`/vacaciones/historial/${det.vacation.owner_id}`}>
+                    Ver el historial de vacaciones de esta persona
+                  </AppLink>
+                </p>
                 {det.vacation.can_interrupt && (
-                  <details className="padded">
-                    <summary className="text-link">
-                      ＋ Registrar suspensión o aplazamiento
-                    </summary>
-                    <p className="help">
-                      Adjunte primero el soporte en Documentos. Los días no disfrutados vuelven al
-                      mismo periodo y deben programarse antes de usar uno nuevo.
+                  <details className="padded vac-suspend">
+                    <summary>Suspender vacaciones</summary>
+                    <p className="vac-suspend-help">
+                      La suspensión es la única novedad de vacaciones. Solo se puede registrar después de
+                      que la persona haya disfrutado al menos 5 días hábiles del periodo. Los días que no
+                      disfrute vuelven a su saldo y debe tomarlos dentro del año.
                     </p>
-                    <form onSubmit={handleVacationInterruptionSubmit} aria-busy={busy}>
-                      <div className="field">
-                        <label htmlFor="int-kind">Novedad</label>
-                        <select
-                          id="int-kind"
-                          value={intKind}
-                          onChange={(e) =>
-                            setIntKind(e.target.value as 'suspension' | 'aplazamiento')
-                          }
-                          required
-                        >
-                          <option value="suspension">Suspensión (durante el disfrute)</option>
-                          <option value="aplazamiento">Aplazamiento (antes de iniciar)</option>
-                        </select>
-                      </div>
-                      <div className="field">
-                        <label htmlFor="int-date">
-                          Fecha desde la cual no se disfrutan los días
-                        </label>
-                        <input
-                          id="int-date"
-                          type="date"
-                          required
-                          value={intDate}
-                          onChange={(e) => setIntDate(e.target.value)}
-                        />
-                      </div>
-                      <div className="field">
-                        <label htmlFor="int-doc">Soporte de la novedad</label>
-                        <select
-                          id="int-doc"
-                          required
-                          value={intDocId}
-                          onChange={(e) => setIntDocId(e.target.value)}
-                        >
-                          <option value="">Seleccione un documento</option>
-                          {det.vacation.interruption_documents.map((d) => (
-                            <option key={d.id} value={d.id}>
-                              {d.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="field">
-                        <label htmlFor="int-reason">Motivo y acto que la soporta</label>
-                        <textarea
-                          id="int-reason"
-                          required
-                          maxLength={5000}
-                          rows={3}
-                          value={intReason}
-                          onChange={(e) => setIntReason(e.target.value)}
-                        />
-                      </div>
-                      <button className="btn secondary" type="submit" disabled={busy}>
-                        Registrar novedad
-                      </button>
-                    </form>
+                    {det.vacation.suspension_desde &&
+                    det.vacation.suspension_desde > String(expediente.data.end_date || '') ? (
+                      <p className="vac-suspend-help">
+                        <strong>Estas vacaciones ya no se pueden suspender:</strong> terminan antes de cumplir los 5
+                        días hábiles disfrutados.
+                      </p>
+                    ) : (
+                      <form onSubmit={handleVacationInterruptionSubmit} aria-busy={busy}>
+                        <div className="field">
+                          <label htmlFor="int-date">¿Desde qué día se suspenden?</label>
+                          <input
+                            id="int-date"
+                            type="date"
+                            required
+                            min={det.vacation.suspension_desde ?? undefined}
+                            max={String(expediente.data.end_date || '')}
+                            aria-describedby="int-date-help"
+                            value={intDate}
+                            onChange={(e) => setIntDate(e.target.value)}
+                          />
+                          {det.vacation.suspension_desde && (
+                            <div className="help" id="int-date-help">
+                              Se puede suspender desde el {FormateadorTexto.fechaCorta(det.vacation.suspension_desde)}.
+                            </div>
+                          )}
+                        </div>
+                        <div className="vac-suspend-row">
+                          <div className="field">
+                            <label htmlFor="int-act-number">Número de la resolución</label>
+                            <input
+                              id="int-act-number"
+                              type="text"
+                              required
+                              maxLength={80}
+                              placeholder="Ejemplo: Resolución 045"
+                              value={intActNumber}
+                              onChange={(e) => setIntActNumber(e.target.value)}
+                            />
+                          </div>
+                          <div className="field">
+                            <label htmlFor="int-act-date">Fecha de la resolución</label>
+                            <input
+                              id="int-act-date"
+                              type="date"
+                              required
+                              value={intActDate}
+                              onChange={(e) => setIntActDate(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="field">
+                          <label htmlFor="int-file">Resolución firmada (PDF, JPG o PNG)</label>
+                          <input
+                            id="int-file"
+                            type="file"
+                            required
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => setIntFile(e.target.files?.[0] ?? null)}
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor="int-reason">Motivo de la suspensión</label>
+                          <textarea
+                            id="int-reason"
+                            required
+                            maxLength={5000}
+                            rows={3}
+                            placeholder="Escriba con sus palabras por qué se suspenden las vacaciones."
+                            value={intReason}
+                            onChange={(e) => setIntReason(e.target.value)}
+                          />
+                        </div>
+                        <button className="btn primary" type="submit" disabled={busy}>
+                          Suspender vacaciones
+                        </button>
+                      </form>
+                    )}
                   </details>
                 )}
               </>

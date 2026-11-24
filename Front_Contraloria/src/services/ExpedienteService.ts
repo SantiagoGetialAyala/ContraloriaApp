@@ -6,6 +6,7 @@ import type {
   CaseListDTO,
   DashboardDTO,
   FieldSchemaDTO,
+  HistorialVacacionesDTO,
   ProceduresDTO,
   VacationDashboardDTO,
 } from '../domain/types';
@@ -176,24 +177,37 @@ export class ExpedienteService extends BaseApiService {
     };
   }
 
-  public async registrarNovedadVacaciones(
+  /** Suspende vacaciones en un solo paso: la resolución se adjunta en la misma solicitud. */
+  public async suspenderVacaciones(
     caseId: string,
     payload: {
       revision: number;
-      kind: 'suspension' | 'aplazamiento';
       on_date: string;
       reason: string;
-      document_id: number;
+      acto_numero: string;
+      acto_fecha: string;
+      file: File;
     },
   ): Promise<{ expediente: ExpedienteBase; mensaje: string }> {
-    const res = await this.http.post<CaseDetailDTO>(
+    const fd = new FormData();
+    fd.append('revision', String(payload.revision));
+    fd.append('on_date', payload.on_date);
+    fd.append('reason', payload.reason);
+    fd.append('acto_numero', payload.acto_numero);
+    fd.append('acto_fecha', payload.acto_fecha);
+    fd.append('file', payload.file);
+    const res = await this.http.postFormData<CaseDetailDTO>(
       `/api/cases/detail/${caseId}/vacation-interruption/`,
-      payload,
+      fd,
     );
     return {
       expediente: ExpedienteFactory.crear(res.data),
-      mensaje: res.message || 'Novedad registrada.',
+      mensaje: res.message || 'Vacaciones suspendidas.',
     };
+  }
+
+  public async obtenerHistorialVacaciones(userId: number): Promise<HistorialVacacionesDTO> {
+    return this.http.get<HistorialVacacionesDTO>(`/api/vacaciones/historial/${userId}/`);
   }
 
   public async obtenerDashboardVacaciones(year?: number): Promise<VacationDashboardDTO> {

@@ -448,10 +448,14 @@ def vacation_context(request, case, initial):
 @require_POST
 def case_vacation_interruption(request, case_id):
     case = get_case(request.user, case_id)
-    form = VacationInterruptionForm(request.POST, case=case)
+    form = VacationInterruptionForm(request.POST, request.FILES, case=case)
     if form.is_valid():
         d = form.cleaned_data
-        perform(request, lambda: services.interrupt_vacation(request.user, case.pk, d['revision'], d['kind'], d['on_date'], d['reason'], d['document_id'].pk), case, 'Novedad de vacaciones registrada.')
+        if d.get('file'):
+            accion = lambda: services.suspend_vacation_with_file(request.user, case.pk, d['revision'], d['on_date'], d['reason'], d['file'], d['acto_numero'], d['acto_fecha'])
+        else:
+            accion = lambda: services.interrupt_vacation(request.user, case.pk, d['revision'], 'suspension', d['on_date'], d['reason'], d['document_id'].pk, d['acto_numero'], d['acto_fecha'])
+        perform(request, accion, case, 'Vacaciones suspendidas. Los días no disfrutados volvieron al periodo.')
     else:
         record_failure(request, ValidationError('Novedad rechazada: ' + ', '.join(form.errors)), case)
         for errors in form.errors.values():

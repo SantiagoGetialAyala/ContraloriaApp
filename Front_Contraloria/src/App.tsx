@@ -19,6 +19,7 @@ const HojasDeVidaPage = lazy(() => import('./pages/HojasDeVidaPage').then((modul
 const PasswordPage = lazy(() => import('./pages/PasswordPage').then((module) => ({ default: module.PasswordPage })));
 const ProcedurePage = lazy(() => import('./pages/ProcedurePage').then((module) => ({ default: module.ProcedurePage })));
 const UsersPage = lazy(() => import('./pages/UsersPage').then((module) => ({ default: module.UsersPage })));
+const VacationHistoryPage = lazy(() => import('./pages/VacationHistoryPage').then((module) => ({ default: module.VacationHistoryPage })));
 const VacationDashboardPage = lazy(() => import('./pages/VacationDashboardPage').then((module) => ({ default: module.VacationDashboardPage })));
 
 export function App() {
@@ -179,6 +180,8 @@ export function App() {
             onNotify={notify}
           />
         );
+      case 'vacation_history':
+        return <VacationHistoryPage key={`hist-${route.userId}`} userId={route.userId} onNotify={notify} />;
       case 'vacation_calendar':
         return <VacationDashboardPage key="vac-cal" usuario={usuario} initialTab="calendar" onNotify={notify} />;
       case 'compensatory_calendar':

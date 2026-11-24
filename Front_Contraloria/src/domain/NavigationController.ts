@@ -9,6 +9,7 @@ export type RouteMatch =
   | { name: 'case_create'; kind: CaseKind }
   | { name: 'case_detail'; caseId: string }
   | { name: 'vacation_calendar' }
+  | { name: 'vacation_history'; userId: number }
   | { name: 'compensatory_calendar' }
   | { name: 'procedure' }
   | { name: 'configuration' }
@@ -100,6 +101,11 @@ export class NavigationController {
     if (clean === '/administracion/auditoria') return { name: 'audit' };
     if (clean === '/hojas-de-vida') return { name: 'hojas_de_vida' };
     if (clean === '/acuerdos-sindicales') return { name: 'acuerdos_sindicales' };
+
+    const historialMatch = clean.match(/^\/vacaciones\/historial\/(\d+)$/);
+    if (historialMatch) {
+      return { name: 'vacation_history', userId: Number(historialMatch[1]) };
+    }
 
     const hojaDeVidaMatch = clean.match(/^\/hojas-de-vida\/(\d+)$/);
     if (hojaDeVidaMatch) {

@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/cases/detail/<uuid:case_id>/vacation-interruption/', api.CaseVacationInterruptionApiView.as_view(), name='api_case_vacation_interruption'),
     path('api/vacaciones/dashboard/', api.VacationDashboardApiView.as_view(), name='api_vacation_dashboard'),
     path('api/vacaciones/preview/', api.VacationPreviewApiView.as_view(), name='api_vacation_preview'),
+    path('api/vacaciones/historial/<int:user_id>/', api.VacationHistoryApiView.as_view(), name='api_vacation_history'),
     path('api/compensatorios/calendar/', api.CompensatoryCalendarApiView.as_view(), name='api_compensatory_calendar'),
     path('api/procedures/', api.ProcedureApiView.as_view(), name='api_procedures'),
     path('api/configuration/', api.ConfigurationApiView.as_view(), name='api_configuration'),

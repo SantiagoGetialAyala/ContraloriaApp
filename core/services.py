@@ -526,35 +526,50 @@ def grant_vacation(user, case):
 
 
 def can_interrupt_vacation(user, case):
-    return case.kind == 'vacaciones' and case.stage == 'disfrute' and 'talento' in role_names(user) and not case.vacation_entries.filter(kind='devolucion').exists()
+    """Talento Humano suspende vacaciones concedidas que ya empezaron; una suspensión por salida."""
+    if not (case.kind == 'vacaciones' and case.stage == 'disfrute' and 'talento' in role_names(user)):
+        return False
+    if case.vacation_entries.filter(kind='devolucion').exists():
+        return False
+    return date.fromisoformat(case.data['start_date']) < timezone.localdate()
 
 
 @transaction.atomic
-def interrupt_vacation(user, case_id, revision, kind, on_date, reason, document_id):
-    """Suspensión (durante el disfrute) o aplazamiento (antes de iniciar). Devuelve los días no disfrutados."""
+def interrupt_vacation(user, case_id, revision, kind, on_date, reason, document_id, acto_numero='', acto_fecha=None):
+    """Suspende vacaciones que ya empezaron y devuelve al periodo los días no disfrutados.
+
+    Es la única novedad de vacaciones: no existe el aplazamiento, porque las vacaciones son
+    obligatorias. Exige la resolución que ordena la suspensión (archivo, número y fecha).
+    """
     case = Case.objects.select_for_update().select_related('policy', 'owner').get(pk=case_id)
     check_revision(case, revision)
+    if kind != 'suspension':
+        raise ValidationError('La única novedad de vacaciones es la suspensión.')
     if not can_interrupt_vacation(user, case):
-        raise PermissionDenied('Solo Talento Humano registra novedades de vacaciones concedidas, una vez por expediente.')
-    if not reason.strip():
-        raise ValidationError('Indique el motivo de la novedad y el acto que la soporta.')
+        raise PermissionDenied('Solo Talento Humano suspende vacaciones que ya empezaron, una vez por cada salida.')
+    reason = (reason or '').strip()
+    acto_numero = (acto_numero or '').strip()
+    if not reason:
+        raise ValidationError('Escriba el motivo de la suspensión.')
+    if not acto_numero:
+        raise ValidationError('Escriba el número de la resolución que ordena la suspensión.')
+    if not acto_fecha:
+        raise ValidationError('Escriba la fecha de la resolución que ordena la suspensión.')
+    if acto_fecha > timezone.localdate():
+        raise ValidationError('La fecha de la resolución no puede ser futura.')
     data = case.data
     start, end = date.fromisoformat(data['start_date']), date.fromisoformat(data['end_date'])
     granted = int(data['business_days'])
-    if kind == 'aplazamiento':
-        if on_date != start:
-            raise ValidationError('El aplazamiento aplica desde la fecha de inicio prevista.')
-        if timezone.localdate() >= start:
-            raise ValidationError('Las vacaciones ya iniciaron; registre una suspensión.')
-        enjoyed = 0
-    elif kind == 'suspension':
-        if not start < on_date <= end:
-            raise ValidationError('La suspensión debe ocurrir después del primer día y antes del último día de disfrute.')
-        if on_date > timezone.localdate():
-            raise ValidationError('No se puede registrar una suspensión futura.')
-        enjoyed = vacations.count_business_days(start, on_date - timedelta(days=1))
-    else:
-        raise ValidationError('Novedad desconocida.')
+    if not start < on_date <= end:
+        raise ValidationError('La suspensión debe ser después del primer día y a más tardar el último día de las vacaciones.')
+    if on_date > timezone.localdate():
+        raise ValidationError('No se puede registrar una suspensión en una fecha futura.')
+    enjoyed = vacations.count_business_days(start, on_date - timedelta(days=1))
+    period = VacationPeriod.objects.get(pk=data['period_id'])
+    disfrutados = vacations.dias_disfrutados(period, exclude_case=case) + enjoyed
+    if disfrutados < vacations.DIAS_MINIMOS_PRIMERA_SALIDA:
+        minima = vacations.fecha_minima_suspension(case)
+        raise ValidationError(f'Solo se puede suspender después de disfrutar al menos {vacations.DIAS_MINIMOS_PRIMERA_SALIDA} días hábiles del periodo (en esa fecha llevaría {disfrutados}). Se puede suspender desde el {minima:%d/%m/%Y}.')
     returned = granted - enjoyed
     if returned <= 0:
         raise ValidationError('No quedan días por devolver.')
@@ -562,14 +577,26 @@ def interrupt_vacation(user, case_id, revision, kind, on_date, reason, document_
     document = case.documents.filter(pk=document_id, category='novedad_vacaciones', created_at__gte=entry.created_at).first()
     if not document:
         raise ValidationError('Adjunte el soporte de la novedad después de la concesión.')
-    refund = VacationLedgerEntry.objects.create(period=entry.period, case=case, kind='devolucion', days=returned, effective_on=on_date, note=reason, actor=user)
-    data.update({'interruption_kind': kind, 'interruption_date': on_date.isoformat(), 'interruption_reason': reason, 'enjoyed_days': enjoyed, 'returned_days': returned, 'return_date': on_date.isoformat()})
-    if enjoyed:
-        data['end_date'] = (on_date - timedelta(days=1)).isoformat()
+    refund = VacationLedgerEntry.objects.create(period=entry.period, case=case, kind='devolucion', days=returned, effective_on=on_date, note=f'Resolución {acto_numero} · {reason}', actor=user)
+    data.setdefault('planned_end_date', data['end_date'])
+    data.update({
+        'interruption_kind': 'suspension', 'interruption_date': on_date.isoformat(), 'interruption_reason': reason,
+        'interruption_act_number': acto_numero, 'interruption_act_date': acto_fecha.isoformat(),
+        'interruption_document_id': document.pk, 'enjoyed_days': enjoyed, 'returned_days': returned,
+        'return_date': on_date.isoformat(), 'end_date': (on_date - timedelta(days=1)).isoformat(),
+    })
     before = case.stage
     bump(case)
-    audit(case, user, 'Vacaciones suspendidas' if kind == 'suspension' else 'Vacaciones aplazadas', before=before, after=case.stage, note=reason, ledger_entry=refund.pk, enjoyed=enjoyed, returned=returned, document_id=document.pk)
+    audit(case, user, 'Vacaciones suspendidas', before=before, after=case.stage, note=reason, ledger_entry=refund.pk,
+          enjoyed=enjoyed, returned=returned, document_id=document.pk, acto=acto_numero)
     return case
+
+
+@transaction.atomic
+def suspend_vacation_with_file(user, case_id, revision, on_date, reason, file, acto_numero, acto_fecha):
+    """Adjunta la resolución y suspende en un solo paso; si la suspensión no procede, no queda el archivo."""
+    document = upload(user, case_id, revision, 'novedad_vacaciones', file)
+    return interrupt_vacation(user, case_id, revision + 1, 'suspension', on_date, reason, document.pk, acto_numero, acto_fecha)
 
 
 @transaction.atomic

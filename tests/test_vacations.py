@@ -188,45 +188,98 @@ class VacationTests(TestCase):
             self.request(start=start)
         self.request(start=self.business_day(60))
         with self.assertRaisesMessage(ValidationError, 'se cruzan con otras vacaciones'):
-            self.request(start=self.business_day(62), days=3)
+            self.request(start=self.business_day(62), days=5)
 
-    def test_suspension_returns_days_that_must_be_programmed_first(self):
-        start = self.business_day(-12)
-        case = self.grant(self.request(start=start))
+    def suspend(self, case, on_date, user=None, acto='RES-SUSP-1', acto_fecha=None, reason='Necesidad del servicio'):
         doc = self.attach(case, 'novedad_vacaciones', self.people['talento'])
-        on_date = start + timedelta(days=3)
+        services.interrupt_vacation(user or self.people['talento'], case.pk, case.revision, 'suspension', on_date, reason, doc.pk, acto, acto_fecha or timezone.localdate())
+        return self.refresh(case)
+
+    def test_first_trip_of_each_period_is_at_least_five_business_days(self):
+        with self.assertRaisesMessage(ValidationError, 'primera salida de vacaciones de cada periodo debe ser de al menos 5'):
+            self.request(days=3)
+        self.request(days=5)
+        # Con días ya tomados antes del sistema, ya no es la primera salida: se permiten salidas cortas.
+        services.register_initial_vacation_days(self.people['talento'], self.people['jefe'], 1, 10, 'Hoja de vida')
+        corta = self.request(self.people['jefe'], days=3)
+        self.assertEqual(corta.data['business_days'], 3)
+
+    def test_suspension_only_after_five_days_enjoyed_and_with_resolution(self):
+        start = self.business_day(-25)
+        case = self.grant(self.request(start=start))
+        minima = vacations.fecha_minima_suspension(case)
+        self.assertEqual(vacations.count_business_days(start, minima - timedelta(days=1)), 5)
+        with self.assertRaisesMessage(ValidationError, 'después de disfrutar al menos 5 días hábiles'):
+            self.suspend(case, start + timedelta(days=1))
+        with self.assertRaisesMessage(ValidationError, 'única novedad de vacaciones es la suspensión'):
+            services.interrupt_vacation(self.people['talento'], case.pk, case.revision, 'aplazamiento', minima, 'x', 1, 'R', timezone.localdate())
+        with self.assertRaisesMessage(ValidationError, 'número de la resolución'):
+            self.suspend(case, minima, acto='')
         with self.assertRaises(PermissionDenied):
-            services.interrupt_vacation(self.people['jefe'], case.pk, case.revision, 'suspension', on_date, 'Incapacidad', doc.pk)
-        services.interrupt_vacation(self.people['talento'], case.pk, case.revision, 'suspension', on_date, 'Incapacidad médica durante el disfrute', doc.pk)
-        case = self.refresh(case)
-        enjoyed = vacations.count_business_days(start, on_date - timedelta(days=1))
-        self.assertEqual(case.data['enjoyed_days'], enjoyed)
-        self.assertEqual(case.data['returned_days'], 15 - enjoyed)
-        self.assertEqual(case.data['return_date'], on_date.isoformat())
+            self.suspend(case, minima, user=self.people['jefe'])
+        case = self.suspend(case, minima, acto='Resolución 045', reason='Incapacidad médica durante el disfrute')
+        self.assertEqual(case.data['enjoyed_days'], 5)
+        self.assertEqual(case.data['returned_days'], 10)
+        self.assertEqual(case.data['interruption_act_number'], 'Resolución 045')
+        self.assertEqual(case.data['planned_end_date'], vacations.add_business_days(start, 15).isoformat())
         period = VacationPeriod.objects.get(pk=case.data['period_id'])
-        self.assertEqual(vacations.period_balance(period), 15 - enjoyed)
-        with self.assertRaisesMessage(PermissionDenied, 'una vez por expediente'):
-            services.interrupt_vacation(self.people['talento'], case.pk, case.revision, 'suspension', on_date, 'Otra', doc.pk)
-        with self.assertRaisesMessage(ValidationError, f'tiene {15 - enjoyed} días hábiles disponibles'):
-            self.request(start=self.business_day(40))
-        remaining = self.request(start=self.business_day(40), days=15 - enjoyed)
-        self.assertEqual(remaining.data['period_id'], period.pk)
-        self.advance(case, self.people['talento'], actual_return_date=on_date)
+        self.assertEqual(vacations.period_balance(period), 10)
+        with self.assertRaisesMessage(PermissionDenied, 'una vez por cada salida'):
+            self.suspend(case, minima)
+        self.advance(case, self.people['talento'], actual_return_date=minima)
         self.assertEqual(case.stage, 'cerrado')
 
-    def test_postponement_via_http_returns_all_days_and_frees_dates(self):
-        start = self.business_day(20)
+    def test_future_vacations_cannot_be_suspended(self):
+        case = self.grant(self.request(start=self.business_day(20)))
+        self.assertFalse(services.can_interrupt_vacation(self.people['talento'], case))
+
+    def test_suspend_more_than_once_and_history_shows_what_is_left(self):
+        start = self.business_day(-40)
+        first = self.grant(self.request(start=start))
+        first = self.suspend(first, vacations.fecha_minima_suspension(first), acto='Resolución 010')
+        self.advance(first, self.people['talento'], actual_return_date=date.fromisoformat(first.data['return_date']))
+        # Retoma 8 de los 10 días pendientes y la vuelve a suspender al segundo día: ya lleva 5 del periodo.
+        restart = self.business_day(-14)
+        second = self.grant(self.request(start=restart, days=8))
+        self.assertTrue(services.can_interrupt_vacation(self.people['talento'], second))
+        second = self.suspend(second, vacations.fecha_minima_suspension(second), acto='Resolución 020')
+        period = VacationPeriod.objects.get(pk=first.data['period_id'])
+        self.assertEqual(vacations.period_balance(period), 15 - 5 - second.data['enjoyed_days'])
+        hist = next(p for p in vacations.historial(self.people['servidor']) if p['numero'] == period.number)
+        self.assertEqual(hist['pendientes'], vacations.period_balance(period))
+        self.assertEqual([e['acto_numero'] for e in hist['eventos'] if e['tipo'] == 'suspension'], ['Resolución 010', 'Resolución 020'])
+        self.assertEqual(hist['plazo'], (vacations.add_years(start, 1) - timedelta(days=1)).isoformat())
+        self.assertEqual([e['tipo'] for e in hist['eventos']], ['salida', 'suspension', 'salida', 'suspension'])
+
+    def test_history_permissions_and_one_step_upload_via_api(self):
+        start = self.business_day(-25)
         case = self.grant(self.request(start=start))
-        doc = self.attach(case, 'novedad_vacaciones', self.people['talento'])
         client = Client()
         client.force_login(self.people['talento'])
-        response = client.post(reverse('case_vacation_interruption', args=[case.pk]), {'revision': case.revision, 'kind': 'aplazamiento', 'on_date': start.isoformat(), 'reason': 'Necesidades del servicio, Resolución 100', 'document_id': doc.pk})
-        self.assertEqual(response.status_code, 302)
-        case = self.refresh(case)
-        self.assertEqual(case.data['returned_days'], 15)
-        self.assertEqual(vacations.period_balance(VacationPeriod.objects.get(pk=case.data['period_id'])), 15)
-        again = self.request(start=start)
-        self.assertEqual(again.data['period_id'], case.data['period_id'])
+        minima = vacations.fecha_minima_suspension(case)
+        archivo = SimpleUploadedFile('resolucion.pdf', b'%PDF-1.4\nresolucion de suspension\n%%EOF')
+        # Si la suspensión no procede, la resolución tampoco queda guardada.
+        res = client.post(reverse('api_case_vacation_interruption', args=[case.pk]), {'revision': case.revision, 'on_date': (start + timedelta(days=1)).isoformat(), 'acto_numero': 'Resolución 099', 'acto_fecha': timezone.localdate().isoformat(), 'reason': 'Necesidad del servicio', 'file': archivo})
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(case.documents.filter(category='novedad_vacaciones').exists())
+        archivo.seek(0)
+        res = client.post(reverse('api_case_vacation_interruption', args=[case.pk]), {'revision': case.revision, 'on_date': minima.isoformat(), 'acto_numero': 'Resolución 099', 'acto_fecha': timezone.localdate().isoformat(), 'reason': 'Necesidad del servicio', 'file': archivo})
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(case.documents.filter(category='novedad_vacaciones').count(), 1)
+        url = reverse('api_vacation_history', args=[self.people['servidor'].pk])
+        eventos = [e for periodo in client.get(url).json()['data']['periodos'] for e in periodo['eventos']]
+        self.assertIn('Resolución 099', [e.get('acto_numero') for e in eventos])
+        for username, status in [('servidor', 200), ('jefe', 200), ('jefe_archivo', 403)]:
+            other = Client()
+            other.force_login(self.people[username])
+            self.assertEqual(other.get(url).status_code, status, username)
+
+    def test_deadline_alert_one_year_after_first_day(self):
+        start = self.business_day(-380)
+        case = self.grant(self.request(start=start))
+        self.suspend(case, vacations.fecha_minima_suspension(case))
+        labels = [a['label'] for a in vacations.alerts(self.people['talento'], [])]
+        self.assertTrue(any('se venció el plazo para tomarlos' in label for label in labels), labels)
 
     def test_superior_visibility_and_self_approval(self):
         team_case = self.request()
@@ -274,7 +327,7 @@ class VacationTests(TestCase):
         client.force_login(self.people['talento'])
         detail = client.get(reverse('case_detail', args=[case.pk]))
         self.assertContains(detail, 'Saldo de vacaciones')
-        self.assertContains(detail, 'Registrar suspensión o aplazamiento')
+        self.assertNotContains(detail, 'aplazamiento')
         admin = User.objects.create_user('admin', password='Una-clave-segura-2026')
         Profile.objects.create(user=admin, department='Sistemas')
         admin.groups.add(Group.objects.get_or_create(name='administrador')[0])

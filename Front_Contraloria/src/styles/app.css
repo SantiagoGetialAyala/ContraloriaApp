@@ -3947,6 +3947,231 @@ dialog.vac-modal-backdrop::backdrop {
   }
 }
 
+/* --- Vacaciones · suspensión e historial por funcionario ---
+   Letra de 14 px o más, controles de 44 px y estados escritos con palabras. */
+.vac-history-link {
+  margin: 0;
+}
+
+.vac-history-link .btn,
+.vac-suspend .btn,
+.vac-suspend input,
+.vac-suspend textarea {
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.vac-suspend > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  font-family: var(--font-label);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--link);
+}
+
+.vac-suspend[open] > summary {
+  margin-bottom: 12px;
+}
+
+.vac-suspend-help {
+  max-width: 720px;
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.vac-suspend-row {
+  display: grid;
+  /* Dos columnas solo si cada campo tiene espacio; si no, uno debajo del otro. */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0 12px;
+}
+
+.vac-row-history {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.hist-person {
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.hist-total {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 20px 24px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.hist-total span {
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.hist-total strong {
+  font-family: var(--font-heading);
+  font-size: 34px;
+  color: var(--text-primary);
+}
+
+.hist-total small {
+  max-width: 760px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.hist-periodo {
+  margin-bottom: 18px;
+  padding: 18px 22px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  font-size: 14px;
+}
+
+.hist-periodo > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hist-periodo h2 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.hist-periodo > header p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+}
+
+.hist-saldo {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.hist-saldo strong {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  color: var(--text-primary);
+}
+
+.hist-saldo small {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.hist-saldo.completo strong {
+  color: var(--status-success-fg);
+}
+
+.hist-resumen {
+  margin: 12px 0 0;
+  color: var(--text-secondary);
+}
+
+.hist-plazo {
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--status-warning-border);
+  border-radius: var(--radius-sm);
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
+}
+
+.hist-plazo.vencido {
+  border-color: var(--status-error-border);
+  background: var(--status-error-bg);
+  color: var(--status-error-fg);
+}
+
+.hist-vacio {
+  margin: 14px 0 0;
+  color: var(--text-secondary);
+}
+
+.hist-eventos {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hist-evento {
+  display: grid;
+  gap: 3px;
+  padding: 10px 14px;
+  border-left: 4px solid var(--border-control);
+  border-radius: var(--radius-xs);
+  background: var(--surface-subtle);
+  line-height: 1.5;
+}
+
+.hist-evento strong {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.hist-evento span {
+  color: var(--text-secondary);
+}
+
+.hist-evento .text-link {
+  justify-self: start;
+  font-size: 14px;
+}
+
+.hist-evento.tomado {
+  border-left-color: var(--status-success-border);
+}
+
+.hist-evento.suspendido {
+  border-left-color: var(--status-warning-border);
+}
+
+.hist-evento.programado,
+.hist-evento.tramite {
+  border-left-color: var(--status-info-border);
+}
+
+.hist-completos > summary {
+  min-height: 44px;
+  padding: 10px 0;
+  font-family: var(--font-label);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--link);
+}
+
+@media (max-width: 760px) {
+  .vac-suspend-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .hist-saldo {
+    justify-items: start;
+  }
+}
+
 /* --- Acuerdos sindicales ---
    Mismo criterio que vacaciones: letra de 14 px o más, controles de 44 px, lenguaje sencillo
    y estados escritos con palabras (nunca solo con color). */
