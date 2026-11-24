@@ -8,6 +8,7 @@ import { AuthPage } from './pages/AuthPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { appServices } from './services/ServiceContainer';
 
+const AcuerdosSindicalesPage = lazy(() => import('./pages/AcuerdosSindicalesPage').then((module) => ({ default: module.AcuerdosSindicalesPage })));
 const AuditPage = lazy(() => import('./pages/AuditPage').then((module) => ({ default: module.AuditPage })));
 const CaseCreatePage = lazy(() => import('./pages/CaseCreatePage').then((module) => ({ default: module.CaseCreatePage })));
 const CaseDetailPage = lazy(() => import('./pages/CaseDetailPage').then((module) => ({ default: module.CaseDetailPage })));
@@ -155,6 +156,7 @@ export function App() {
     const personnelRoute = ['hojas_de_vida', 'hoja_de_vida_detail'].includes(route.name);
     if ((adminRoute && !usuario.esAdministrador()) ||
         (personnelRoute && !usuario.esAdministrador() && !usuario.tieneRol('talento')) ||
+        (route.name === 'acuerdos_sindicales' && !usuario.puedeVerAcuerdos()) ||
         (route.name === 'configuration' && !usuario.puedeVerAdministracion())) {
       return <section className="card padded"><h1>Acceso restringido</h1><p>Su usuario no tiene permisos para esta sección.</p><AppLink className="btn secondary" to="/">Volver al inicio</AppLink></section>;
     }
@@ -200,6 +202,8 @@ export function App() {
             onNotify={notify}
           />
         );
+      case 'acuerdos_sindicales':
+        return <AcuerdosSindicalesPage onNotify={notify} />;
       case 'audit':
         return <AuditPage onNotify={notify} />;
       case 'password_change':

@@ -1,0 +1,413 @@
+{
+  "fuente": "Análisis de acuerdos sindicales de Control Interno y textos de las resoluciones 136 de 2019 y 080 de 2023.",
+  "organizacion": "ASDECCOL Subdirectiva Nariño",
+  "acuerdos": [
+    {
+      "clave": "2015",
+      "numero": "Acuerdo de 2015",
+      "titulo": "Acuerdo sindical del 21 de mayo de 2015",
+      "fecha_firma": "2015-05-21",
+      "acto_adopcion": "",
+      "puntos": [
+        {
+          "orden": 1,
+          "articulo": "Artículo décimo",
+          "titulo": "Cargas laborales y evaluación del desempeño",
+          "texto": "La CMP através de los superiores inmediatos de los dirigentes sindicales concertarán las cargas laborales, el portafolio de evidencias y la evaluación de desempeño de tal forma que no se coarten las garantias sindicales",
+          "tipo": "compromiso",
+          "periodicidad": "semestral",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 2,
+          "articulo": "Artículo décimo primero",
+          "titulo": "Participación en actividades sindicales",
+          "texto": "La CMP respetará la participación de los empleados en todas las actividades sindicales que sena convocadas por las Organizaciones de primero, segundo y tercer grado. No se descontará salarios a los trabajadores por participar en actividades inherentes a la actividad sindical y no propiciará ni aplicará acciones que vulneren este derecho",
+          "tipo": "compromiso",
+          "periodicidad": "semestral",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 3,
+          "articulo": "Artículo décimo segundo",
+          "titulo": "Audiencias con el Contralor",
+          "texto": "El Contrarlor de la CMP atenderá de manera oportuna las solicitudes de audiencia que le presenten las Directivas de ASDECCOL Subdirectiva Nariño",
+          "tipo": "compromiso",
+          "periodicidad": "semestral",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 4,
+          "articulo": "Artículo décimo tercero",
+          "titulo": "Descuentos sindicales",
+          "texto": "La CMP se compromete a descontar y/o cesar los descuentos de acuerdo con las novedades reportadas por la Subdirectiva y girar los descuentos a ASDECCOL Nacional y Subdirectiva Nariño",
+          "tipo": "compromiso",
+          "periodicidad": "semestral",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 5,
+          "articulo": "Artículo décimo cuarto",
+          "titulo": "Incremento salarial",
+          "texto": "Incremento salarial sea producto del análisis técnico y conveniente de apropiacion presupuestal que posibiliten la negociación y concertación, correspondiente al 6%",
+          "tipo": "compromiso",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 6,
+          "articulo": "Artículo décimo quinto",
+          "titulo": "Dotación",
+          "texto": "Para cada vigencia presupuestal dentro de la invitación pública se destinará un monto no inferior al 80% del salario mínimo mensual legal vigente para dotación",
+          "tipo": "compromiso",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 7,
+          "articulo": "Artículo décimo sexto",
+          "titulo": "Jornada laboral y trabajo suplementario",
+          "texto": "Se continua respetando la jornada laboral de los dias viernes establecida mediante Resolucion 0226 de junio 26 de 2014",
+          "tipo": "compromiso",
+          "periodicidad": "semestral",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 8,
+          "articulo": "Artículo décimo séptimo",
+          "titulo": "Permisos y licencias remuneradas",
+          "texto": "Cuando medie justa causa se continuará otorgando permisos en concordancia No. 6 art. 33 Ley 734 del 2000 y se otorgará licencia remunerada por luto la ley 1635 de 2013",
+          "tipo": "beneficio",
+          "periodicidad": "por_solicitud",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 9,
+          "articulo": "Artículo décimo octavo",
+          "titulo": "Prima de servicios",
+          "texto": "Continúa liquidando y pagando la prima de servicios anual. Se pagará dentro de los 15 dias del mes de julio",
+          "tipo": "compromiso",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 10,
+          "articulo": "Artículo décimo noveno",
+          "titulo": "Educación y capacitación",
+          "texto": "Para capacitación, formación, entrenamiento y habilitación técnica, la CMP celebrará convenios con la ESAP, SENA,etc., dentro de su plan institucional se programará capacitaciones, talleres a los servidores públicos, en materia de negociación colectiva. La CMP reconocerá gastos de viaje: pasajes aéreos y viáticos a mínimo dos eventos. Eventos a los que se tenga que asistir en procura de capacitaciones dentro del país, con ocasión a actividades propias del sindicato",
+          "tipo": "compromiso",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 11,
+          "articulo": "Artículo vigésimo",
+          "titulo": "Plan de bienestar social",
+          "texto": "Formular el plan de bienestar social para todos los servidores públicos, se celebrará o conmemorará: el dia de la mujer, del trabajo y día del aniversario de la CMP",
+          "tipo": "compromiso",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 12,
+          "articulo": "Artículo vigésimo primero",
+          "titulo": "Recreación, cultura y deportes",
+          "texto": "Otorgar dos (2) horas semanales para la práctica de actividad física. La CMP asumirá costos de viáticos para los Juegos Fiscales de las Contralorias Territoriales",
+          "tipo": "compromiso",
+          "periodicidad": "semestral",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 13,
+          "articulo": "Artículo vigésimo segundo",
+          "titulo": "Salud ocupacional",
+          "texto": "La CMP dispondrá recursos para realizar actividades de promoción y prevención. Una vez al año se deberá capacitar a la brigada de emergencias y se desarrollará el reglamento de higiene y seguridad industrial",
+          "tipo": "compromiso",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 14,
+          "articulo": "Artículo vigésimo tercero",
+          "titulo": "Flexibilización laboral para padres y madres",
+          "texto": "Horario especial de trabajo para madres y padres que acrediten el cuidado de sus hijos menores de 18 años, hijos con discapacidad, así mismo empleados con algún tipo de discapacidad",
+          "tipo": "beneficio",
+          "periodicidad": "por_solicitud",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 15,
+          "articulo": "Artículo vigésimo cuarto",
+          "titulo": "Plan de incentivos",
+          "texto": "Anualmente se adoptará el plan de incentivos pecuniarios y no pecuniarios para el mejor empleado de carrera de la entidad, mejor empleado de carrera de cada nivel jerárquico, mejor empleado de libre nombramiento y mejores equipos trabajo. Se destinarán recursos no inferiores a 2 SMMLV, beneficios de tiquetes aéreos, obtenidos del programa \"Millas\"",
+          "tipo": "compromiso",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 16,
+          "articulo": "Artículo vigésimo quinto",
+          "titulo": "Resultados de la medición del clima laboral",
+          "texto": "En un lapso no mayor a 30 dias realizar la divulgación del resultado del ultimo estudio de clima laboral.",
+          "tipo": "compromiso",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "2019",
+      "numero": "Acuerdo de 2019",
+      "titulo": "Acuerdo laboral del 8 de abril de 2019",
+      "fecha_firma": "2019-04-08",
+      "acto_adopcion": "Resolución 136 del 7 de mayo de 2019",
+      "puntos": [
+        {
+          "orden": 1,
+          "articulo": "Artículo décimo segundo",
+          "titulo": "Capacitación y formación académica",
+          "texto": "Para acceder a este beneficio previamente se realizará un cronograma de actividades que deberá desarrollarse en la misma jornada laboral y se concertará entre el trabajador y jefe inmediato. Permiso académico: se otorga permiso presentando la certificación, recibo de pago o constancia de matrícula. Concluida la formación academica el trabajador presentará constancia de asistencia o certificado de la entidad que brindó la formación. El trabajador tendrá 2 horas diarias o hasta 40 horas mensuales. Formación académica hasta 1 mes: una vez por semestre podrá acceder a un permiso. Formacion academica hasta 6 meses: podrá acceder a un permiso dentro del año calendario. Formación académica superior a 1 año hasta 3 años y estudios de pregrado: permiso solo hasta por dos años",
+          "tipo": "beneficio",
+          "periodicidad": "por_solicitud",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 2,
+          "articulo": "Artículo décimo tercero",
+          "titulo": "Protección a la familia",
+          "texto": "Si se presenta incapacidad laboral por enfermedad y se presenta una incapacidad superior a 3 días o inferior a 90 dias, se destinará el dinero que deja de percibir el trabajador, correspondiente al 33.33%, se trasladará al rubro de bienestar social, si ese rubro no fuera suficiente para cumplir la actividades mencionadas de bienestar social se dispondrá esos recurso para completar y mejorar actividades de fin de año",
+          "tipo": "compromiso",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 3,
+          "articulo": "Artículo décimo cuarto",
+          "titulo": "Incentivo para el uso de bicicletas",
+          "texto": "La CMP se compromete a presentar la solicitud ante el Alcalde, para que expida el acto administrativo que habilite el parqueadero para ingresar las bicicletas, en caso de cambio de sede se les gestione el espacio respectivo del parqueo de bicicletas",
+          "tipo": "compromiso",
+          "periodicidad": "semestral",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 4,
+          "articulo": "Artículo décimo quinto",
+          "titulo": "Estímulo de cumpleaños",
+          "texto": "Se concederá como estímulo una jornada remunerada de descanso para los funcionarios de la entidad por su cumpleaños, podra disfrutar el mismo día o al día siguiente.",
+          "tipo": "beneficio",
+          "periodicidad": "por_solicitud",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 5,
+          "articulo": "Artículo décimo sexto",
+          "titulo": "Fondo de bienestar social",
+          "texto": "Se presenta al Alcalde un proyecto de acuerdo de creación del fondo de bienestar social que se financiará con los recursos recaudados por concepto de sanciones y/o multas interpuestas por la Contraloria Municipal",
+          "tipo": "compromiso",
+          "periodicidad": "semestral",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "2023",
+      "numero": "Acuerdo de 2023",
+      "titulo": "Acuerdo colectivo del 7 de marzo de 2023",
+      "fecha_firma": "2023-03-07",
+      "acto_adopcion": "Resolución 080 del 15 de marzo de 2023",
+      "puntos": [
+        {
+          "orden": 1,
+          "articulo": "Artículo 5",
+          "titulo": "Permiso por antigüedad (un día al año)",
+          "texto": "Los servidores públicos de la CMP una vez al año tendrán un día de descanso remunerado, siempre y cuando presten un servicio continuo en la entidad durante 1 año, no son acumulables, se puede sumar al día de vacaciones y ese día no se considera como día de vacaciones para efectos prestacionales, se informará a talento humano y al jefe inmediato a fin de llevar el control correspondiente, se perderá si el funcionario se encuentra en licencia no remunerada",
+          "tipo": "beneficio",
+          "periodicidad": "por_solicitud",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 2,
+          "articulo": "Artículo 6",
+          "titulo": "Permiso remunerado para atender a un familiar enfermo",
+          "texto": "Debe agotarse los permisos establecidos en el decreto 1083 de 2015, art. 2.2.5.5.17, este permiso adicional se concederá siempre y cuando el familiar este dentro del segundo grado de consanguinidad, primero civil, cónyuge o compañero y suegros, 3 días se otorga siempre y cuando el funcionario demuestre que esta a su cargo",
+          "tipo": "beneficio",
+          "periodicidad": "por_solicitud",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 3,
+          "articulo": "Artículo 7",
+          "titulo": "Permiso remunerado por luto",
+          "texto": "Se concederá 1 dia adicional remuneado, adicional a los 5 hábiles que la Ley confiere (cónyuge, compañero, familiar hasta el grado de consanguinidad, primer de afinidad y segundo civil)",
+          "tipo": "beneficio",
+          "periodicidad": "por_solicitud",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 4,
+          "articulo": "Artículo 8",
+          "titulo": "Permiso por el Día Internacional de la Mujer",
+          "texto": "4 horas en la jornada de la tarde se concederá. Si el dia 8 de marzo no es hábil el beneficio no se aplicará.",
+          "tipo": "beneficio",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 5,
+          "articulo": "Artículo 9",
+          "titulo": "Descanso compensado en Semana Santa, Navidad, fin de año y Carnavales",
+          "texto": "La Contraloría Municipal de Pasto concederá a sus servidores públicos descanso remunerado en Semana Santa, Navidad, festividades de fin de año y festividades regionales (específicamente los Carnavales de Pasto), el cual debe ser previamente compensado de conformidad con el acto administrativo que expida la entidad, de acuerdo con la programación establecida, la cual se realizará con el consenso de los trabajadores, especialmente con los representantes de ASDECCOL. Quienes hayan compensado los Carnavales y estén en vacaciones los disfrutarán después del descanso compensado. El descanso de Semana Santa es el único que se aplica por turnos, acordados con el jefe inmediato.",
+          "tipo": "beneficio",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 6,
+          "articulo": "Artículo 10",
+          "titulo": "Descanso compensado en la semana de receso escolar",
+          "texto": "Debe acreditarse que es padre o madre de hijos que se encuentren estudiando se concederá 2 dias hábiles, presentar copia de matrícula del plantel educativo, el cual debe compensarse en los dias habituales de trabajo o dias sábados, deberá concertarse con su jefe inmediato y el jefe inmediato informar a la oficina de talento humano",
+          "tipo": "beneficio",
+          "periodicidad": "por_solicitud",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 7,
+          "articulo": "Artículo 11",
+          "titulo": "Exoneración de compensar el tiempo de los descansos compensados",
+          "texto": "Por circunstancias especiales de vulnerabilidad, la Contraloría exonerará de la compensación, por cuatro (4) horas, a los funcionarios que tengan su cónyuge, compañero o compañera permanente o un familiar hasta el segundo grado de consanguinidad en situación de discapacidad o enfermedad reconocida que requiera su acompañamiento, siempre que estén bajo su responsabilidad y cuidado, o que tengan indicaciones médicas catastróficas. Las horas de exoneración se toman al final del término de la compensación. El funcionario debe presentar el escrito con la causal y los documentos que la acrediten al jefe inmediato, con copia a Talento Humano.",
+          "tipo": "beneficio",
+          "periodicidad": "por_solicitud",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 8,
+          "articulo": "Artículo 14",
+          "titulo": "Incentivos individuales por buen desempeño",
+          "texto": "Funcionario que acredite buen desempeño del año anterior, será acreedor a un reconocimiento público mediante acto administrativo cumpliendo los requisitos: nivel sobresaliente en la evaluación de desempeño del año anterior (01 de febrero del año anterior al 31 de enero del año en curso) y no haber sido sancionado disciplinariamente en el año anterior, el señor contralor reconocerá al de libre nombramiento y remoción",
+          "tipo": "beneficio",
+          "periodicidad": "anual",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 9,
+          "articulo": "Artículo 15",
+          "titulo": "Permiso por antigüedad como incentivo (cada 4 años)",
+          "texto": "Conceder a los servidores publicos de la entidad los siguientes incentivos: 4 años de servicio cumplidos: 1 día, 8 años de servicio cumplidos: 2 días, 12 años de servicio cumplidos: 3 días, 16 años de servicio y en adelante por cada 4 años de servicio cumplidos: 4 días",
+          "tipo": "beneficio",
+          "periodicidad": "por_solicitud",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        },
+        {
+          "orden": 10,
+          "articulo": "Artículo 16",
+          "titulo": "Jornada laboral y horario",
+          "texto": "JORNADA LABORAL Y MODIFICCION DEL HORARIO LABORAL: 8 horas diarias y la jornada continua de 8 a.m. a 4 p.m. Los dias viernes, atendiendo las circustancias ocasionales, excepcionales o especiales",
+          "tipo": "compromiso",
+          "periodicidad": "semestral",
+          "evidencias_requeridas": [
+            "constancia"
+          ]
+        },
+        {
+          "orden": 11,
+          "articulo": "Artículo 17",
+          "titulo": "Horario flexible (elección en junio y diciembre)",
+          "texto": "Existen dos alternativas , que se deberán concertar e informarse por escrito a Talento Humano en los últimos meses de junio y diciembre de cada año, de no hacerlo se determinará la jornada: Alternativa No. 1: 8:00 a.m a 12:00 m y 2:00 p.m a 6:00 p.m. de lunes a jueves y los viernes en jornada continua de 8:00 a.m. a 4 p.m. Alternativa No. 2: 8:00 a.m a 1:00 p.m. y de 2:00 p.m a 6:00 p.m. de lunes a jueves y viernes jornada continua de 8:00 a.m. a 4 p.m. este acuerdo complementa el artículo vigésimo tercero de flexibilidad laboral, aprobado en el acuerdo sindical el 21 de mayo de 2015",
+          "tipo": "beneficio",
+          "periodicidad": "semestral",
+          "evidencias_requeridas": [
+            "solicitud",
+            "resolucion",
+            "constancia"
+          ]
+        }
+      ]
+    }
+  ]
+}

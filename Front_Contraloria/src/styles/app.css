@@ -3947,6 +3947,595 @@ dialog.vac-modal-backdrop::backdrop {
   }
 }
 
+/* --- Acuerdos sindicales ---
+   Mismo criterio que vacaciones: letra de 14 px o más, controles de 44 px, lenguaje sencillo
+   y estados escritos con palabras (nunca solo con color). */
+.acu-heading {
+  align-items: flex-end;
+}
+
+.acu-intro {
+  max-width: 760px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.acu-year {
+  min-width: 180px;
+  margin: 0;
+}
+
+.acu-heading select,
+.acu-filters input,
+.acu-form input,
+.acu-form select,
+.acu-form textarea,
+.acu-upload select,
+.acu-upload input,
+.acu-people input[type='search'] {
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.acu-notice {
+  margin-bottom: 18px;
+  font-size: 14px;
+}
+
+.acu-stats {
+  margin-bottom: 20px;
+}
+
+.acu-stats .stat-top {
+  font-size: 13px;
+}
+
+.acu-stats .stat > p {
+  font-size: 13px;
+}
+
+.acu-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.acu-main,
+.acu-side {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+
+.acu-side {
+  position: sticky;
+  top: 20px;
+}
+
+.acu-panel {
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  font-size: 14px;
+}
+
+.acu-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.acu-segmented button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+  font-family: var(--font-label);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.acu-segmented button.active {
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-border);
+  color: var(--btn-primary-fg);
+}
+
+.acu-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 24px;
+}
+
+.acu-filter-row .field {
+  flex: 1 1 280px;
+  margin: 0;
+}
+
+.acu-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.acu-check input {
+  width: 20px;
+  height: 20px;
+}
+
+.acu-empty {
+  margin: 0;
+  padding: 20px;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.acu-acuerdo {
+  padding: 0;
+  overflow: hidden;
+}
+
+.acu-acuerdo-head {
+  padding: 18px 20px 10px;
+}
+
+.acu-acuerdo-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 20px;
+}
+
+.acu-acuerdo-head p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.acu-documento {
+  padding: 0 20px 14px;
+}
+
+.acu-puntos {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.acu-punto {
+  border-bottom: 1px solid var(--border-subtle);
+  scroll-margin-top: 20px;
+}
+
+.acu-punto:last-child {
+  border-bottom: 0;
+}
+
+.acu-punto > summary {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  padding: 12px 20px;
+  list-style: none;
+}
+
+.acu-punto > summary:hover {
+  background: var(--surface-hover);
+}
+
+.acu-punto > summary::-webkit-details-marker {
+  display: none;
+}
+
+.acu-punto > summary .badge {
+  justify-content: center;
+}
+
+.acu-punto-title strong {
+  display: block;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.acu-punto-title small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.acu-punto-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.acu-punto-count::after {
+  content: '▾';
+  margin-left: 10px;
+  font-size: 16px;
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.acu-punto[open] .acu-punto-count::after {
+  transform: rotate(180deg);
+}
+
+.acu-punto-body {
+  padding: 4px 20px 20px;
+  background: var(--surface-subtle);
+}
+
+.acu-punto-body h4 {
+  margin: 16px 0 8px;
+  font-size: 15px;
+}
+
+.acu-estado-detalle {
+  margin: 10px 0 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.acu-punto-body blockquote {
+  margin: 0;
+  padding: 12px 16px;
+  border-left: 4px solid var(--brand-primary);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+
+.acu-requisitos {
+  margin: 12px 0 0;
+  line-height: 1.6;
+}
+
+.acu-muted {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.acu-registro {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.acu-registro > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.acu-registro p {
+  margin: 6px 0;
+  line-height: 1.55;
+}
+
+.acu-checklist {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acu-checklist li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-weight: 600;
+}
+
+.acu-checklist li.ok {
+  color: var(--status-success-fg);
+}
+
+.acu-checklist li.missing {
+  color: var(--status-error-fg);
+}
+
+.acu-checklist li.optional {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.acu-evidencias {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acu-evidencias li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  background: var(--surface-subtle);
+}
+
+.acu-evidencia-links {
+  display: flex;
+  gap: 16px;
+}
+
+.acu-evidencia-links .text-link {
+  font-size: 14px;
+}
+
+.acu-registro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0 6px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.acu-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.acu-upload .field {
+  margin: 0;
+}
+
+.acu-upload .field label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.acu-registro-actions .btn,
+.acu-upload .btn,
+.acu-list .btn,
+.acu-add,
+.acu-form-actions .btn {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.acu-add {
+  margin-top: 6px;
+}
+
+.acu-disclosure > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  font-family: var(--font-label);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--link);
+}
+
+.acu-disclosure[open] > summary {
+  margin-bottom: 10px;
+}
+
+.acu-form {
+  margin-top: 10px;
+  padding: 16px;
+  border: 2px solid var(--brand-primary);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.acu-form h4 {
+  margin-top: 0;
+}
+
+.acu-radios,
+.acu-people {
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+
+.acu-radios legend,
+.acu-people legend {
+  margin-bottom: 8px;
+  font-family: var(--font-label);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.acu-radios label {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.acu-radios label.checked {
+  border-color: var(--brand-primary);
+  background: var(--surface-subtle);
+}
+
+.acu-radios input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+
+.acu-radios strong,
+.acu-radios small {
+  display: block;
+}
+
+.acu-radios small {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.acu-people-list {
+  display: grid;
+  max-height: 240px;
+  margin: 8px 0;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.acu-people-list label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+}
+
+.acu-people-list label:last-child {
+  border-bottom: 0;
+}
+
+.acu-people-list input {
+  width: 20px;
+  height: 20px;
+}
+
+.acu-people-list small {
+  color: var(--text-secondary);
+}
+
+.acu-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.acu-side-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.acu-list {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acu-list > li {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  line-height: 1.5;
+}
+
+.acu-list > li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.acu-list .badge {
+  justify-self: start;
+}
+
+.acu-list small {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.acu-list .btn {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.acu-date {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.acu-ver-todos {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+@media (max-width: 1200px) {
+  .acu-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .acu-side {
+    position: static;
+    grid-row: 1;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .acu-heading {
+    align-items: stretch;
+  }
+  .acu-punto > summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .acu-punto > summary .badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  .acu-registro-actions,
+  .acu-upload {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acu-punto-count::after {
+    transition: none;
+  }
+}
+
 /* ==========================================================================
    DISEÑO RESPONSIVE
    ========================================================================== */
