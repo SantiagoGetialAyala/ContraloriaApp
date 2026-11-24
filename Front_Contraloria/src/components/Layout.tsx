@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import logoContraloria from '../assets/logo-contraloria.png';
 import type { RouteMatch } from '../domain/NavigationController';
 import type { UsuarioSesion } from '../domain/Usuario';
 import type { CaseKind } from '../domain/types';
@@ -70,7 +71,9 @@ export function Layout({ usuario, route, activeCaseKind, messages, onDismissMess
     {sidebarOpen && <button type="button" className="sidebar-backdrop" aria-label="Cerrar menú" onClick={closeSidebar} />}
     <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`} id="sidebar" aria-label="Menú de trabajo">
       <AppLink className="brand" to="/" onClick={closeSidebar}>
-        <span className="brand-mark" aria-hidden="true">TH</span>
+        <span className="brand-mark" aria-hidden="true">
+          <img src={logoContraloria} alt="" className="brand-mark-logo" />
+        </span>
         <span>Talento Humano<small>Contraloría Municipal de Pasto</small></span>
       </AppLink>
       <nav aria-label="Navegación principal">

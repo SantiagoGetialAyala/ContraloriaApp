@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import logoContraloria from '../assets/logo-contraloria.png';
 import type { FlashMessage } from '../components/Layout';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { ApiError } from '../services/HttpClient';
@@ -71,7 +72,11 @@ export function AuthPage({ setupMode, messages, onAuthSuccess }: AuthPageProps) 
         <section className="auth-story">
           <div className="auth-brand">
             <span className="brand-mark">
-              TH<span>✦</span>
+              <img
+                src={logoContraloria}
+                alt="Escudo Contraloría Municipal de Pasto"
+                className="brand-mark-logo"
+              />
             </span>
             <span>
               Contraloría Municipal

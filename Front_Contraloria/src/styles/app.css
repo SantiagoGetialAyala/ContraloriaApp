@@ -218,19 +218,28 @@ small {
 
 .brand-mark {
   display: grid;
-  place-content: center;
-  width: 44px;
+  place-items: center;
+  width: 46px;
   height: 46px;
+  padding: 5px;
   border: 1px solid var(--sidebar-brand-border);
-  background: var(--sidebar-brand-bg);
+  background: var(--sidebar-avatar-bg);
   color: var(--sidebar-brand-fg);
-  border-radius: 10px;
+  border-radius: 12px;
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 20px;
   letter-spacing: -0.03em;
   position: relative;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.brand-mark-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .brand-mark > span {

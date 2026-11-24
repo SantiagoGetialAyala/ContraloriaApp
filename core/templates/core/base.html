@@ -1,8 +1,8 @@
 {% load static %}<!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#085066"><title>{{ title }} · Talento Humano</title><link rel="stylesheet" href="{% static 'core/fonts.css' %}"><link rel="stylesheet" href="{% static 'core/tokens.css' %}"><link rel="stylesheet" href="{% static 'core/app.css' %}"><script src="{% static 'core/app.js' %}" defer></script></head>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#085066"><link rel="icon" type="image/png" href="{% static 'core/logo-contraloria.png' %}"><title>{{ title }} · Talento Humano</title><link rel="stylesheet" href="{% static 'core/fonts.css' %}"><link rel="stylesheet" href="{% static 'core/tokens.css' %}"><link rel="stylesheet" href="{% static 'core/app.css' %}"><script src="{% static 'core/app.js' %}" defer></script></head>
 <body><a class="skip" href="#main">Ir al contenido</a>
 {% if user.is_authenticated %}
-<aside class="sidebar" id="sidebar"><a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark">TH<span>✦</span></span><span>Talento Humano<small>CONTRALORÍA MUNICIPAL DE PASTO</small></span></a><div class="side-section">ESPACIO DE TRABAJO</div>
+<aside class="sidebar" id="sidebar"><a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark" aria-hidden="true"><img src="{% static 'core/logo-contraloria.png' %}" alt="" class="brand-mark-logo"></span><span>Talento Humano<small>CONTRALORÍA MUNICIPAL DE PASTO</small></span></a><div class="side-section">ESPACIO DE TRABAJO</div>
 <nav aria-label="Navegación principal">
 <a href="{% url 'dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"><span aria-hidden="true">◫</span> Panel de gestión</a>
 <a href="{% url 'case_list' 'incapacidad' %}" class="nav-item {% if kind == 'incapacidad' or case.kind == 'incapacidad' %}active{% endif %}"><span aria-hidden="true">✚</span> Incapacidades <span class="nav-arrow">›</span></a>
